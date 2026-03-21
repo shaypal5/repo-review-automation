@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "title": "Broken payload",
+      "category": "reliability",
+      "severity": "urgent",
+      "confidence": 1.4,
+      "summary": "Too short",
+      "evidence": [],
+      "recommended_fix": "Missing enough evidence and uses an invalid severity."
+    }
+  ]
+}

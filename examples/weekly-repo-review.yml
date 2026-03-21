@@ -1,0 +1,28 @@
+name: Weekly Repo Review
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+  security-events: read
+
+jobs:
+  weekly-review:
+    uses: your-org/repo-review-automation/.github/workflows/repo-review.yml@main
+    with:
+      create_issues: false
+      review_mode: full
+      prompt_preset: python
+      min_severity: medium
+      max_issues: 5
+      labels: ai-review
+      paths: .
+      python_version: "3.11"
+      upload_artifacts: true
+      dedupe_mode: title_hash
+      issue_prefix: "[Repo Review]"
+    secrets: inherit
