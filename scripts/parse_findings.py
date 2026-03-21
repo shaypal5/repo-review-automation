@@ -71,7 +71,9 @@ def normalize_finding(finding: dict[str, Any]) -> dict[str, Any]:
     normalized["title"] = str(finding["title"]).strip()
     normalized["summary"] = str(finding["summary"]).strip()
     normalized["recommended_fix"] = str(finding["recommended_fix"]).strip()
-    normalized["evidence"] = [str(item).strip() for item in finding["evidence"] if str(item).strip()]
+    normalized["evidence"] = [
+        str(item).strip() for item in finding["evidence"] if str(item).strip()
+    ]
     normalized["confidence"] = round(float(finding["confidence"]), 2)
     if "proposed_issue_body" in finding and finding["proposed_issue_body"] is not None:
         normalized["proposed_issue_body"] = str(finding["proposed_issue_body"]).strip()
@@ -86,11 +88,7 @@ def filter_findings(
     findings: list[dict[str, Any]], *, min_severity: str, max_issues: int
 ) -> list[dict[str, Any]]:
     threshold = SEVERITY_ORDER[normalize_severity(min_severity)]
-    filtered = [
-        item
-        for item in findings
-        if SEVERITY_ORDER[item["severity"]] >= threshold
-    ]
+    filtered = [item for item in findings if SEVERITY_ORDER[item["severity"]] >= threshold]
     filtered.sort(
         key=lambda item: (
             SEVERITY_ORDER[item["severity"]],

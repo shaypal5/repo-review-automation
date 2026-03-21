@@ -2,9 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "findings"
-  ],
+  "required": ["findings"],
   "properties": {
     "findings": {
       "type": "array",
@@ -31,12 +29,7 @@
           },
           "severity": {
             "type": "string",
-            "enum": [
-              "low",
-              "medium",
-              "high",
-              "critical"
-            ]
+            "enum": ["low", "medium", "high", "critical"]
           },
           "confidence": {
             "type": "number",

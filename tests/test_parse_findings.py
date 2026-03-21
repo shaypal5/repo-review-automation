@@ -5,8 +5,7 @@ from pathlib import Path
 import pytest
 
 from scripts.helpers import load_json
-from scripts.parse_findings import process_findings, render_summary, validate_findings
-
+from scripts.parse_findings import process_findings, render_summary
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

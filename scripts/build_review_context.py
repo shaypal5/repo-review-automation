@@ -9,7 +9,6 @@ if __package__ in {None, ""}:
 
 from scripts.helpers import dump_json, load_json, read_optional_text
 
-
 SIGNAL_LIMITS = {
     "project_metadata": 4000,
     "file_inventory": 5000,
@@ -28,7 +27,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--paths", required=True, help="Configured review path scope.")
     parser.add_argument("--review-mode", required=True, help="Workflow review mode.")
     parser.add_argument("--max-issues", required=True, type=int, help="Cap for requested findings.")
-    parser.add_argument("--prompt-preset", required=True, help="Prompt preset requested by workflow.")
+    parser.add_argument(
+        "--prompt-preset", required=True, help="Prompt preset requested by workflow."
+    )
     parser.add_argument("--output", required=True, help="Context JSON output path.")
     return parser.parse_args()
 

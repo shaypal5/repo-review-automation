@@ -19,7 +19,9 @@ DEFAULT_MODEL = "gpt-4.1-mini"
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run the AI review step against structured context.")
+    parser = argparse.ArgumentParser(
+        description="Run the AI review step against structured context."
+    )
     parser.add_argument("--prompt-file", required=True, help="Prompt markdown file.")
     parser.add_argument("--context-file", required=True, help="review_context.json path.")
     parser.add_argument("--output", required=True, help="Raw findings JSON output path.")
@@ -136,7 +138,7 @@ def main() -> None:
     args = parse_args()
     api_key = os.environ.get(args.api_key_env)
     if not api_key:
-        raise EnvironmentError(
+        raise OSError(
             f"Missing required API key in environment variable {args.api_key_env}."
         )
 
