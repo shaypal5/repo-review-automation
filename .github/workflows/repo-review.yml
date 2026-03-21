@@ -206,7 +206,7 @@ jobs:
             --output out/findings.json \
             --summary out/findings.md
 
-      - name: Dedupe findings against open issues
+      - name: Pass through findings without deduplication
         shell: bash
         run: |
           python automation/scripts/dedupe_findings.py \
@@ -330,6 +330,7 @@ jobs:
           python -m pip install jsonschema requests
 
       - name: Download findings from review job
+        if: ${{ !inputs.upload_artifacts }}
         uses: actions/download-artifact@v4
         with:
           name: _review-findings-passthrough
