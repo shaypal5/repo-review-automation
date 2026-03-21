@@ -1,0 +1,25 @@
+{
+  "repo": {
+    "name": "example-repo",
+    "root": "/tmp/example-repo",
+    "paths": ".",
+    "default_branch": "main",
+    "file_counts": {
+      ".py": 12,
+      ".md": 3
+    },
+    "collector_notes": []
+  },
+  "review_mode": "full",
+  "prompt_preset": "python",
+  "max_issues": 5,
+  "signals": {
+    "project_metadata": "Repository: example-repo",
+    "file_inventory": "Top file extensions:\n- .py: 12",
+    "todos": "src/app.py:12 TODO tighten timeout handling",
+    "tests": "No Python tests detected.",
+    "lint": "compileall succeeded",
+    "git_summary": "abc123 tighten config loading",
+    "ci_workflows": ".github/workflows/ci.yml"
+  }
+}

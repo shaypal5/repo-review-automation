@@ -1,0 +1,193 @@
+name: Reusable Repo Review
+
+on:
+  workflow_call:
+    inputs:
+      create_issues:
+        required: false
+        type: boolean
+        default: false
+      review_mode:
+        required: false
+        type: string
+        default: full
+      prompt_preset:
+        required: false
+        type: string
+        default: default
+      min_severity:
+        required: false
+        type: string
+        default: medium
+      max_issues:
+        required: false
+        type: number
+        default: 5
+      labels:
+        required: false
+        type: string
+        default: ai-review
+      paths:
+        required: false
+        type: string
+        default: .
+      python_version:
+        required: false
+        type: string
+        default: "3.11"
+      upload_artifacts:
+        required: false
+        type: boolean
+        default: true
+      dedupe_mode:
+        required: false
+        type: string
+        default: title_hash
+      issue_prefix:
+        required: false
+        type: string
+        default: "[Repo Review]"
+    outputs:
+      findings_count:
+        description: Number of findings after normalization and filtering.
+        value: ${{ jobs.review.outputs.findings_count }}
+      summary_markdown_path:
+        description: Relative path to the markdown report artifact payload.
+        value: ${{ jobs.review.outputs.summary_markdown_path }}
+      findings_json_path:
+        description: Relative path to the normalized findings JSON artifact payload.
+        value: ${{ jobs.review.outputs.findings_json_path }}
+
+permissions:
+  contents: read
+  pull-requests: read
+  security-events: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    outputs:
+      findings_count: ${{ steps.finalize.outputs.findings_count }}
+      summary_markdown_path: ${{ steps.finalize.outputs.summary_markdown_path }}
+      findings_json_path: ${{ steps.finalize.outputs.findings_json_path }}
+    steps:
+      - name: Resolve automation repository reference
+        id: workflow_ref
+        shell: bash
+        run: |
+          workflow_ref="${{ github.workflow_ref }}"
+          echo "repository=${workflow_ref%%/.github/workflows/*}" >> "$GITHUB_OUTPUT"
+          echo "ref=${workflow_ref##*@}" >> "$GITHUB_OUTPUT"
+
+      - name: Reject unsupported issue creation mode
+        if: ${{ inputs.create_issues }}
+        shell: bash
+        run: |
+          echo "Milestone 1 is report-only. Set create_issues to false." >&2
+          exit 1
+
+      - name: Check out automation repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.workflow_ref.outputs.repository }}
+          ref: ${{ steps.workflow_ref.outputs.ref }}
+          path: automation
+
+      - name: Check out caller repository
+        uses: actions/checkout@v4
+        with:
+          path: caller
+          fetch-depth: 20
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python_version }}
+
+      - name: Install helper dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install jsonschema requests
+
+      - name: Resolve prompt preset
+        id: prompt
+        shell: bash
+        run: |
+          prompt_file="automation/prompts/${{ inputs.prompt_preset }}_review_prompt.md"
+          if [[ ! -f "$prompt_file" ]]; then
+            echo "Unknown prompt preset: ${{ inputs.prompt_preset }}" >&2
+            exit 1
+          fi
+          echo "file=$prompt_file" >> "$GITHUB_OUTPUT"
+
+      - name: Collect deterministic signals
+        shell: bash
+        run: |
+          mkdir -p out/signals
+          bash automation/scripts/collect_signals.sh \
+            --repo-root caller \
+            --paths "${{ inputs.paths }}" \
+            --output-dir out/signals
+
+      - name: Build review context
+        shell: bash
+        run: |
+          python automation/scripts/build_review_context.py \
+            --artifacts-dir out/signals \
+            --repo-root caller \
+            --paths "${{ inputs.paths }}" \
+            --review-mode "${{ inputs.review_mode }}" \
+            --max-issues "${{ inputs.max_issues }}" \
+            --prompt-preset "${{ inputs.prompt_preset }}" \
+            --output out/review_context.json
+
+      - name: Run AI review
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4.1-mini' }}
+        shell: bash
+        run: |
+          python automation/scripts/run_ai_review.py \
+            --prompt-file "${{ steps.prompt.outputs.file }}" \
+            --context-file out/review_context.json \
+            --output out/raw_findings.json
+
+      - name: Validate and normalize findings
+        shell: bash
+        run: |
+          python automation/scripts/parse_findings.py \
+            --input out/raw_findings.json \
+            --schema automation/schemas/findings.schema.json \
+            --min-severity "${{ inputs.min_severity }}" \
+            --max-issues "${{ inputs.max_issues }}" \
+            --context out/review_context.json \
+            --output out/findings.json \
+            --summary out/findings.md
+
+      - name: Upload artifacts
+        if: ${{ inputs.upload_artifacts }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: repo-review-report
+          path: |
+            out/review_context.json
+            out/raw_findings.json
+            out/findings.json
+            out/findings.md
+            out/signals
+
+      - name: Finalize outputs
+        id: finalize
+        shell: bash
+        run: |
+          findings_count="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path("out/findings.json").read_text(encoding="utf-8"))
+          print(len(payload.get("findings", [])))
+          PY
+          )"
+          echo "findings_count=${findings_count}" >> "$GITHUB_OUTPUT"
+          echo "summary_markdown_path=out/findings.md" >> "$GITHUB_OUTPUT"
+          echo "findings_json_path=out/findings.json" >> "$GITHUB_OUTPUT"
