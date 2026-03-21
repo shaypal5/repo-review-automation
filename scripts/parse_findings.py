@@ -98,9 +98,7 @@ def validate_findings(payload: dict[str, Any], schema: dict[str, Any]) -> None:
 def filter_findings(
     findings: list[dict[str, Any]], *, min_severity: str, max_issues: int
 ) -> list[dict[str, Any]]:
-    threshold = SEVERITY_ORDER[
-        require_known_severity(min_severity, field_name="min_severity")
-    ]
+    threshold = SEVERITY_ORDER[require_known_severity(min_severity, field_name="min_severity")]
     filtered = [item for item in findings if SEVERITY_ORDER[item["severity"]] >= threshold]
     filtered.sort(
         key=lambda item: (
