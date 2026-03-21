@@ -22,6 +22,7 @@ dependencies = [
 ]
 
 optional-dependencies.dev = [
+  "pytest-cov>=5,<7",
   "pytest>=8,<9",
   "ruff>=0.11,<1",
 ]

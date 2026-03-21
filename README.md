@@ -45,6 +45,18 @@ The workflow sequence is:
 8. render `out/findings.md`
 9. upload artifacts and expose outputs
 
+## PR agent context integration
+
+This repository self-consumes [`shaypal5/pr-agent-context`](https://github.com/shaypal5/pr-agent-context)
+on pull requests.
+
+- [`.github/workflows/ci.yml`](.github/workflows/ci.yml) uploads a combined `coverage.xml` artifact and
+  invokes `pr-agent-context` in `coverage_xml_artifact` mode.
+- [`.github/workflows/pr-agent-context-refresh.yml`](.github/workflows/pr-agent-context-refresh.yml)
+  handles follow-up refreshes after reviews and external check completion.
+- The refresh flow reuses coverage from the `CI` workflow with scoped comment updates and suppresses
+  no-op all-clear refresh comments.
+
 ## Reusable workflow inputs
 
 Supported inputs:
@@ -154,7 +166,7 @@ python -m pip install -e '.[dev]'
 Run tests:
 
 ```bash
-pytest -q
+pytest --cov=repo_review_automation --cov-branch --cov-report=xml --cov-report=term -q
 ```
 
 Run Ruff:
