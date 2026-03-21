@@ -138,9 +138,7 @@ def main() -> None:
     args = parse_args()
     api_key = os.environ.get(args.api_key_env)
     if not api_key:
-        raise OSError(
-            f"Missing required API key in environment variable {args.api_key_env}."
-        )
+        raise OSError(f"Missing required API key in environment variable {args.api_key_env}.")
 
     prompt_text = read_text(Path(args.prompt_file))
     context = load_json(Path(args.context_file))
