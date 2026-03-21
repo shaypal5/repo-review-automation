@@ -28,7 +28,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--review-mode", required=True, help="Workflow review mode.")
     parser.add_argument("--max-issues", required=True, type=int, help="Cap for requested findings.")
     parser.add_argument(
-        "--prompt-preset", required=True, help="Prompt preset requested by workflow."
+        "--prompt-preset",
+        required=True,
+        help="Prompt preset requested by workflow.",
     )
     parser.add_argument("--output", required=True, help="Context JSON output path.")
     return parser.parse_args()
