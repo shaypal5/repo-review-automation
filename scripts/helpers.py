@@ -140,11 +140,7 @@ def _why_this_matters(finding: dict[str, Any]) -> str:
 
 def build_issue_body(finding: dict[str, Any], *, fingerprint: str) -> str:
     summary = str(finding.get("summary", "")).strip()
-    evidence = [
-        f"- {item.strip()}"
-        for item in finding.get("evidence", [])
-        if str(item).strip()
-    ]
+    evidence = [f"- {item.strip()}" for item in finding.get("evidence", []) if str(item).strip()]
     suggested_improvement = str(
         finding.get("proposed_issue_body") or finding.get("recommended_fix") or ""
     ).strip()

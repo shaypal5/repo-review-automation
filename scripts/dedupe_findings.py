@@ -62,9 +62,7 @@ def dedupe_findings(
         raise ValueError("Findings payload must contain a findings list.")
 
     existing_index = (
-        build_existing_fingerprint_index(existing_issues or [])
-        if normalized_mode != "off"
-        else {}
+        build_existing_fingerprint_index(existing_issues or []) if normalized_mode != "off" else {}
     )
 
     kept_findings: list[dict[str, Any]] = []

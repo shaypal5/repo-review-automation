@@ -40,15 +40,15 @@ That split is the key milestone 1 design choice. It lets the job inspect the cal
 
 The workflow sequence is:
 
-1. resolve the automation repository and ref from `github.workflow_ref`
-2. check out `automation/` and `caller/`
-3. set up Python and install the helper dependencies
-4. collect deterministic signals into `out/signals/`
-5. build `out/review_context.json`
-6. call the AI model to produce `out/raw_findings.json`
-7. validate, normalize, filter, and cap findings into `out/findings.json`
-8. render `out/findings.md`
-9. dedupe `out/findings.json` into `out/findings_deduped.json`
+01. resolve the automation repository and ref from `github.workflow_ref`
+02. check out `automation/` and `caller/`
+03. set up Python and install the helper dependencies
+04. collect deterministic signals into `out/signals/`
+05. build `out/review_context.json`
+06. call the AI model to produce `out/raw_findings.json`
+07. validate, normalize, filter, and cap findings into `out/findings.json`
+08. render `out/findings.md`
+09. dedupe `out/findings.json` into `out/findings_deduped.json`
 10. create GitHub issues from deduped findings when `create_issues=true`
 11. upload artifacts and expose outputs
 

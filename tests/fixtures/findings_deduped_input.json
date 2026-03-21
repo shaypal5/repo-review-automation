@@ -18,9 +18,7 @@
       "severity": "medium",
       "confidence": 0.78,
       "summary": "Label input is accepted as free-form text, which can lead to malformed issue payloads or hard-to-debug workflow failures when spacing and empty entries are not normalized.",
-      "evidence": [
-        ".github/workflows/repo-review.yml:1-120"
-      ],
+      "evidence": [".github/workflows/repo-review.yml:1-120"],
       "recommended_fix": "Normalize comma-separated labels before issue creation and fail with a clear API error if a requested label does not exist."
     }
   ]
