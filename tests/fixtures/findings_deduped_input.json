@@ -1,0 +1,27 @@
+{
+  "findings": [
+    {
+      "title": "GitHub API calls do not retry transient failures",
+      "category": "reliability",
+      "severity": "high",
+      "confidence": 0.91,
+      "summary": "The automation makes direct API calls without a retry strategy, so transient failures can break the review flow and create noisy maintenance work.",
+      "evidence": [
+        "scripts/run_ai_review.py",
+        ".github/workflows/repo-review.yml"
+      ],
+      "recommended_fix": "Wrap external API calls with explicit timeout handling and a small retry budget for transient failures."
+    },
+    {
+      "title": "Issue creation labels are not validated consistently",
+      "category": "automation",
+      "severity": "medium",
+      "confidence": 0.78,
+      "summary": "Label input is accepted as free-form text, which can lead to malformed issue payloads or hard-to-debug workflow failures when spacing and empty entries are not normalized.",
+      "evidence": [
+        ".github/workflows/repo-review.yml:1-120"
+      ],
+      "recommended_fix": "Normalize comma-separated labels before issue creation and fail with a clear API error if a requested label does not exist."
+    }
+  ]
+}

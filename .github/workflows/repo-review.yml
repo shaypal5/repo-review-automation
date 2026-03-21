@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       create_issues:
-        description: Reserved for milestone 2 issue creation. Milestone 1 rejects true.
+        description: Enable dedupe and issue creation for accepted findings.
         required: false
         type: boolean
         default: false
@@ -29,7 +29,7 @@ on:
         type: number
         default: 5
       labels:
-        description: Reserved for milestone 2 issue labeling.
+        description: Comma-separated labels applied to created issues.
         required: false
         type: string
         default: ai-review
@@ -49,12 +49,12 @@ on:
         type: boolean
         default: true
       dedupe_mode:
-        description: Reserved for milestone 2 deduplication behavior.
+        description: Dedupe behavior for issue creation candidates.
         required: false
         type: string
         default: title_hash
       issue_prefix:
-        description: Reserved for milestone 2 issue title formatting.
+        description: Prefix used for created issue titles.
         required: false
         type: string
         default: "[Repo Review]"
@@ -68,9 +68,22 @@ on:
       findings_json_path:
         description: Relative path to the normalized findings JSON artifact payload.
         value: ${{ jobs.review.outputs.findings_json_path }}
+      created_issue_count:
+        description: Number of GitHub issues created from deduped findings.
+        value: ${{ jobs.review.outputs.created_issue_count }}
+      created_issue_numbers:
+        description: JSON array of created GitHub issue numbers.
+        value: ${{ jobs.review.outputs.created_issue_numbers }}
+      deduped_findings_json_path:
+        description: Relative path to the post-dedupe findings JSON artifact payload.
+        value: ${{ jobs.review.outputs.deduped_findings_json_path }}
+      created_issues_json_path:
+        description: Relative path to the created issues JSON artifact payload.
+        value: ${{ jobs.review.outputs.created_issues_json_path }}
 
 permissions:
   contents: read
+  issues: write
   pull-requests: read
   security-events: read
 
@@ -81,6 +94,10 @@ jobs:
       findings_count: ${{ steps.finalize.outputs.findings_count }}
       summary_markdown_path: ${{ steps.finalize.outputs.summary_markdown_path }}
       findings_json_path: ${{ steps.finalize.outputs.findings_json_path }}
+      created_issue_count: ${{ steps.finalize.outputs.created_issue_count }}
+      created_issue_numbers: ${{ steps.finalize.outputs.created_issue_numbers }}
+      deduped_findings_json_path: ${{ steps.finalize.outputs.deduped_findings_json_path }}
+      created_issues_json_path: ${{ steps.finalize.outputs.created_issues_json_path }}
     steps:
       - name: Resolve automation repository reference
         id: workflow_ref
@@ -89,13 +106,6 @@ jobs:
           workflow_ref="${{ github.workflow_ref }}"
           echo "repository=${workflow_ref%%/.github/workflows/*}" >> "$GITHUB_OUTPUT"
           echo "ref=${workflow_ref##*@}" >> "$GITHUB_OUTPUT"
-
-      - name: Reject unsupported issue creation mode
-        if: ${{ inputs.create_issues }}
-        shell: bash
-        run: |
-          echo "Milestone 1 is report-only. Set create_issues to false." >&2
-          exit 1
 
       - name: Check out automation repository
         uses: actions/checkout@v4
@@ -193,6 +203,57 @@ jobs:
             --output out/findings.json \
             --summary out/findings.md
 
+      - name: Dedupe findings against open issues
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          dedupe_mode="${{ inputs.dedupe_mode }}"
+          if [[ "${{ inputs.create_issues }}" != "true" ]]; then
+            dedupe_mode="off"
+          fi
+          python automation/scripts/dedupe_findings.py \
+            --repo "${{ github.repository }}" \
+            --input out/findings.json \
+            --mode "${dedupe_mode}" \
+            --output out/findings_deduped.json \
+            --report out/dedupe_report.json
+
+      - name: Create GitHub issues from deduped findings
+        if: ${{ inputs.create_issues }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          python automation/scripts/create_issues.py \
+            --repo "${{ github.repository }}" \
+            --input out/findings_deduped.json \
+            --labels "${{ inputs.labels }}" \
+            --issue-prefix "${{ inputs.issue_prefix }}" \
+            --output out/created_issues.json
+
+      - name: Initialize empty created issues payload
+        if: ${{ !inputs.create_issues }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, str(Path("automation").resolve()))
+          from scripts.helpers import dump_json
+
+          dump_json(
+              Path("out/created_issues.json"),
+              {
+                  "repo": "${{ github.repository }}",
+                  "requested_count": 0,
+                  "created_count": 0,
+                  "labels": [],
+                  "issues": [],
+              },
+          )
+          PY
+
       - name: Upload artifacts
         if: ${{ inputs.upload_artifacts }}
         uses: actions/upload-artifact@v4
@@ -202,7 +263,10 @@ jobs:
             out/review_context.json
             out/raw_findings.json
             out/findings.json
+            out/findings_deduped.json
             out/findings.md
+            out/dedupe_report.json
+            out/created_issues.json
             out/signals
 
       - name: Finalize outputs
@@ -216,6 +280,24 @@ jobs:
           print(len(payload.get("findings", [])))
           PY
           )"
+          created_issue_numbers="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path("out/created_issues.json").read_text(encoding="utf-8"))
+          print(json.dumps([item["issue_number"] for item in payload.get("issues", [])]))
+          PY
+          )"
+          created_issue_count="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path("out/created_issues.json").read_text(encoding="utf-8"))
+          print(int(payload.get("created_count", 0)))
+          PY
+          )"
           echo "findings_count=${findings_count}" >> "$GITHUB_OUTPUT"
           echo "summary_markdown_path=out/findings.md" >> "$GITHUB_OUTPUT"
           echo "findings_json_path=out/findings.json" >> "$GITHUB_OUTPUT"
+          echo "created_issue_count=${created_issue_count}" >> "$GITHUB_OUTPUT"
+          echo "created_issue_numbers=${created_issue_numbers}" >> "$GITHUB_OUTPUT"
+          echo "deduped_findings_json_path=out/findings_deduped.json" >> "$GITHUB_OUTPUT"
+          echo "created_issues_json_path=out/created_issues.json" >> "$GITHUB_OUTPUT"

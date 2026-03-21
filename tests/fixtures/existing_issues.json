@@ -1,0 +1,14 @@
+[
+  {
+    "number": 17,
+    "title": "[Repo Review] GitHub API calls do not retry transient failures",
+    "html_url": "https://github.com/example/repo/issues/17",
+    "body": "Tracked by automation.\n\n<!-- repo-review-fingerprint: __FINGERPRINT__ -->"
+  },
+  {
+    "number": 18,
+    "title": "Human-authored maintenance task",
+    "html_url": "https://github.com/example/repo/issues/18",
+    "body": "No automation marker here."
+  }
+]
