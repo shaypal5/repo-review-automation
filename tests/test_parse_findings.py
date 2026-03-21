@@ -21,8 +21,15 @@ def test_valid_findings_pass() -> None:
 def test_invalid_findings_fail() -> None:
     payload = load_json(FIXTURES / "invalid_findings.json")
     schema = load_json(Path("schemas/findings.schema.json"))
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError, match="finding severity"):
         process_findings(payload, schema, min_severity="low", max_issues=5)
+
+
+def test_invalid_min_severity_fails() -> None:
+    payload = load_json(FIXTURES / "valid_findings.json")
+    schema = load_json(Path("schemas/findings.schema.json"))
+    with pytest.raises(ValueError, match="min_severity"):
+        process_findings(payload, schema, min_severity="urgent", max_issues=5)
 
 
 def test_severity_filtering_works() -> None:

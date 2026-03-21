@@ -31,6 +31,14 @@ SEVERITY_ALIASES = {
 }
 
 
+def require_known_severity(value: str, *, field_name: str) -> str:
+    normalized = normalize_severity(value)
+    if normalized not in SEVERITY_ORDER:
+        allowed_values = ", ".join(SEVERITY_ORDER)
+        raise ValueError(f"{field_name} must be one of: {allowed_values}. Got: {value!r}")
+    return normalized
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Validate and normalize AI findings.")
     parser.add_argument("--input", required=True, help="Raw findings JSON path.")
@@ -66,7 +74,10 @@ def normalize_severity(value: str) -> str:
 
 def normalize_finding(finding: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(finding)
-    normalized["severity"] = normalize_severity(str(finding["severity"]))
+    normalized["severity"] = require_known_severity(
+        str(finding["severity"]),
+        field_name="finding severity",
+    )
     normalized["category"] = str(finding["category"]).strip().lower().replace(" ", "_")
     normalized["title"] = str(finding["title"]).strip()
     normalized["summary"] = str(finding["summary"]).strip()
@@ -87,7 +98,9 @@ def validate_findings(payload: dict[str, Any], schema: dict[str, Any]) -> None:
 def filter_findings(
     findings: list[dict[str, Any]], *, min_severity: str, max_issues: int
 ) -> list[dict[str, Any]]:
-    threshold = SEVERITY_ORDER[normalize_severity(min_severity)]
+    threshold = SEVERITY_ORDER[
+        require_known_severity(min_severity, field_name="min_severity")
+    ]
     filtered = [item for item in findings if SEVERITY_ORDER[item["severity"]] >= threshold]
     filtered.sort(
         key=lambda item: (

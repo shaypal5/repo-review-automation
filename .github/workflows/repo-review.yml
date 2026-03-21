@@ -4,46 +4,57 @@ on:
   workflow_call:
     inputs:
       create_issues:
+        description: Reserved for milestone 2 issue creation. Milestone 1 rejects true.
         required: false
         type: boolean
         default: false
       review_mode:
+        description: Review depth mode passed into the context builder.
         required: false
         type: string
         default: full
       prompt_preset:
+        description: Prompt file preset name under prompts/.
         required: false
         type: string
         default: default
       min_severity:
+        description: Minimum severity threshold for final findings.
         required: false
         type: string
         default: medium
       max_issues:
+        description: Maximum number of findings to report. Must be an integer value.
         required: false
         type: number
         default: 5
       labels:
+        description: Reserved for milestone 2 issue labeling.
         required: false
         type: string
         default: ai-review
       paths:
+        description: Relative repository paths to review. Supports comma or whitespace separation.
         required: false
         type: string
         default: .
       python_version:
+        description: Python version used for helper scripts.
         required: false
         type: string
         default: "3.11"
       upload_artifacts:
+        description: Upload JSON, Markdown, and collector artifacts.
         required: false
         type: boolean
         default: true
       dedupe_mode:
+        description: Reserved for milestone 2 deduplication behavior.
         required: false
         type: string
         default: title_hash
       issue_prefix:
+        description: Reserved for milestone 2 issue title formatting.
         required: false
         type: string
         default: "[Repo Review]"
@@ -121,6 +132,23 @@ jobs:
           fi
           echo "file=$prompt_file" >> "$GITHUB_OUTPUT"
 
+      - name: Validate integer inputs
+        id: validated
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          max_issues = "${{ inputs.max_issues }}"
+          try:
+              numeric_value = float(max_issues)
+          except ValueError as exc:
+              raise SystemExit(f"max_issues must be numeric, got: {max_issues!r}") from exc
+          if not numeric_value.is_integer():
+              raise SystemExit(
+                  f"max_issues must be an integer-compatible value, got: {max_issues!r}"
+              )
+          print(f"max_issues={int(numeric_value)}")
+          PY
+
       - name: Collect deterministic signals
         shell: bash
         run: |
@@ -138,7 +166,7 @@ jobs:
             --repo-root caller \
             --paths "${{ inputs.paths }}" \
             --review-mode "${{ inputs.review_mode }}" \
-            --max-issues "${{ inputs.max_issues }}" \
+            --max-issues "${{ steps.validated.outputs.max_issues }}" \
             --prompt-preset "${{ inputs.prompt_preset }}" \
             --output out/review_context.json
 
@@ -160,7 +188,7 @@ jobs:
             --input out/raw_findings.json \
             --schema automation/schemas/findings.schema.json \
             --min-severity "${{ inputs.min_severity }}" \
-            --max-issues "${{ inputs.max_issues }}" \
+            --max-issues "${{ steps.validated.outputs.max_issues }}" \
             --context out/review_context.json \
             --output out/findings.json \
             --summary out/findings.md

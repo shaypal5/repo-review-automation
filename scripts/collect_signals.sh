@@ -96,11 +96,57 @@ extensions = Counter()
 collector_notes = []
 ignored_parts = {".git", ".pytest_cache", ".ruff_cache", "__pycache__", ".venv"}
 
-for file_path in repo_root.rglob("*"):
-    if not file_path.is_file():
-        continue
-    if any(part in ignored_parts for part in file_path.parts):
-        continue
+def parse_scope_tokens(raw: str) -> list[str]:
+    if not raw.strip():
+        return ["."]
+    return [token for token in raw.replace(",", " ").split() if token]
+
+
+def resolve_search_roots(repo_root: Path, raw_paths: str) -> tuple[list[Path], list[str], list[str]]:
+    notes: list[str] = []
+    search_roots: list[Path] = []
+    effective_scope: list[str] = []
+
+    for token in parse_scope_tokens(raw_paths):
+        candidate = (repo_root / token).resolve()
+        if not candidate.exists():
+            notes.append(f"Path scope entry not found and ignored: {token!r}")
+            continue
+        search_roots.append(candidate)
+        effective_scope.append(token)
+
+    if not search_roots:
+        search_roots = [repo_root]
+        effective_scope = ["."]
+        if raw_paths.strip():
+            notes.append("No valid paths in --paths; scanned entire repository instead.")
+
+    return search_roots, effective_scope, notes
+
+
+def iter_scoped_files(repo_root: Path, raw_paths: str):
+    search_roots, _, notes = resolve_search_roots(repo_root, raw_paths)
+    seen_files: set[Path] = set()
+    for note in notes:
+        collector_notes.append(note)
+
+    for root in search_roots:
+        candidates = [root] if root.is_file() else root.rglob("*")
+        for file_path in candidates:
+            if not file_path.is_file():
+                continue
+            if any(part in ignored_parts for part in file_path.parts):
+                continue
+            resolved = file_path.resolve()
+            if resolved in seen_files:
+                continue
+            seen_files.add(resolved)
+            yield file_path
+
+
+_, effective_scope, _ = resolve_search_roots(repo_root, paths_value)
+
+for file_path in iter_scoped_files(repo_root, paths_value):
     suffix = file_path.suffix.lower() or "[no_extension]"
     extensions[suffix] += 1
 
@@ -108,6 +154,7 @@ payload = {
     "repository_name": repo_root.name,
     "default_branch": None,
     "paths": paths_value,
+    "paths_scope": effective_scope,
     "file_counts": dict(extensions.most_common(20)),
     "collector_notes": collector_notes,
 }
@@ -130,28 +177,52 @@ PY
 run_capture \
   "File inventory" \
   "$file_inventory_file" \
-  python3 - "$REPO_ROOT" <<'PY'
+  python3 - "$REPO_ROOT" "$PATHS" <<'PY'
 from collections import Counter
 from pathlib import Path
 import sys
 
 repo_root = Path(sys.argv[1]).resolve()
+paths_value = sys.argv[2]
 extensions = Counter()
 directories = Counter()
 ignored_parts = {".git", ".pytest_cache", ".ruff_cache", "__pycache__", ".venv"}
 
-for file_path in repo_root.rglob("*"):
-    if not file_path.is_file():
-        continue
-    if any(part in ignored_parts for part in file_path.parts):
-        continue
-    suffix = file_path.suffix.lower() or "[no_extension]"
-    extensions[suffix] += 1
-    try:
-      first_part = file_path.relative_to(repo_root).parts[0]
-    except IndexError:
-      first_part = "."
-    directories[first_part] += 1
+def parse_scope_tokens(raw: str) -> list[str]:
+    if not raw.strip():
+        return ["."]
+    return [token for token in raw.replace(",", " ").split() if token]
+
+
+search_roots = []
+seen_files = set()
+
+for token in parse_scope_tokens(paths_value):
+    candidate = (repo_root / token).resolve()
+    if candidate.exists():
+        search_roots.append(candidate)
+
+if not search_roots:
+    search_roots = [repo_root]
+
+for root in search_roots:
+    candidates = [root] if root.is_file() else root.rglob("*")
+    for file_path in candidates:
+        if not file_path.is_file():
+            continue
+        if any(part in ignored_parts for part in file_path.parts):
+            continue
+        resolved = file_path.resolve()
+        if resolved in seen_files:
+            continue
+        seen_files.add(resolved)
+        suffix = file_path.suffix.lower() or "[no_extension]"
+        extensions[suffix] += 1
+        try:
+            first_part = file_path.relative_to(repo_root).parts[0]
+        except IndexError:
+            first_part = "."
+        directories[first_part] += 1
 
 print("Top file extensions:")
 for extension, count in extensions.most_common(20):

@@ -6,14 +6,14 @@
 
 Implemented in this milestone:
 
-- reusable workflow at [`.github/workflows/repo-review.yml`](/Users/shaypalachy/clones/repo-review-automation/.github/workflows/repo-review.yml)
-- deterministic signal collection under [`scripts/collect_signals.sh`](/Users/shaypalachy/clones/repo-review-automation/scripts/collect_signals.sh)
-- compact review-context builder in [`scripts/build_review_context.py`](/Users/shaypalachy/clones/repo-review-automation/scripts/build_review_context.py)
-- OpenAI-backed AI review runner in [`scripts/run_ai_review.py`](/Users/shaypalachy/clones/repo-review-automation/scripts/run_ai_review.py)
-- schema validation and Markdown report generation in [`scripts/parse_findings.py`](/Users/shaypalachy/clones/repo-review-automation/scripts/parse_findings.py)
-- strict findings schema at [`schemas/findings.schema.json`](/Users/shaypalachy/clones/repo-review-automation/schemas/findings.schema.json)
-- prompt presets under [`prompts/`](/Users/shaypalachy/clones/repo-review-automation/prompts/default_review_prompt.md)
-- parsing and summary tests under [`tests/test_parse_findings.py`](/Users/shaypalachy/clones/repo-review-automation/tests/test_parse_findings.py)
+- reusable workflow at [`.github/workflows/repo-review.yml`](.github/workflows/repo-review.yml)
+- deterministic signal collection under [`scripts/collect_signals.sh`](scripts/collect_signals.sh)
+- compact review-context builder in [`scripts/build_review_context.py`](scripts/build_review_context.py)
+- OpenAI-backed AI review runner in [`scripts/run_ai_review.py`](scripts/run_ai_review.py)
+- schema validation and Markdown report generation in [`scripts/parse_findings.py`](scripts/parse_findings.py)
+- strict findings schema at [`schemas/findings.schema.json`](schemas/findings.schema.json)
+- prompt presets under [`prompts/`](prompts/)
+- parsing and summary tests under [`tests/test_parse_findings.py`](tests/test_parse_findings.py)
 
 Not implemented in milestone 1:
 
@@ -81,6 +81,8 @@ Optional:
 
 If `OPENAI_MODEL` is not set, the workflow defaults to `gpt-4.1-mini`.
 
+Data disclosure: the workflow collects deterministic signals from the caller repository, including selected file inventories, workflow contents, TODO/FIXME matches, git history summaries, and related metadata. The resulting review context, including excerpts of that collected repository content and metadata, is sent to the OpenAI API and processed on OpenAI infrastructure outside GitHub. Consumers should verify that sending this data to OpenAI is acceptable under their organization’s security, privacy, and compliance requirements before enabling the workflow.
+
 ## Minimal consumer workflow
 
 Copyable example:
@@ -116,7 +118,7 @@ jobs:
     secrets: inherit
 ```
 
-There is also a ready-to-copy example at [`examples/weekly-repo-review.yml`](/Users/shaypalachy/clones/repo-review-automation/examples/weekly-repo-review.yml).
+There is also a ready-to-copy example at [`examples/weekly-repo-review.yml`](examples/weekly-repo-review.yml).
 
 ## Artifacts and outputs
 
@@ -189,7 +191,7 @@ bash scripts/collect_signals.sh \
 - the AI provider is fixed to OpenAI for this milestone
 - deterministic collectors are intentionally lightweight and Python-oriented
 - command failures inside signal collection are captured into artifacts instead of failing the workflow immediately
-- `paths` is passed into the context and collector, but the MVP collector does not implement deep multi-path routing logic
+- `paths` supports basic file-or-directory scoping, but the MVP collector does not implement advanced monorepo routing or config merging
 
 ## Roadmap
 
@@ -204,7 +206,7 @@ Future milestones can add:
 
 ## Notes on the AI output contract
 
-The model is required to return JSON matching [`schemas/findings.schema.json`](/Users/shaypalachy/clones/repo-review-automation/schemas/findings.schema.json). Each finding must include:
+The model is required to return JSON matching [`schemas/findings.schema.json`](schemas/findings.schema.json). Each finding must include:
 
 - `title`
 - `category`
