@@ -126,15 +126,14 @@ def dedupe_findings(
 def main() -> None:
     args = parse_args()
     findings_payload = load_json(Path(args.input))
-    mode = normalize_dedupe_mode(args.mode)
     existing_issues: list[dict[str, Any]] = []
-    if mode != "off":
+    if normalize_dedupe_mode(args.mode) != "off":
         token = github_token_from_env()
         with requests.Session() as session:
             existing_issues = list_open_issues(args.repo, token=token, session=session)
     deduped_payload, report = dedupe_findings(
         findings_payload,
-        mode=mode,
+        mode=args.mode,
         existing_issues=existing_issues,
     )
     dump_json(Path(args.output), deduped_payload)

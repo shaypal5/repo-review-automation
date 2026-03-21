@@ -140,7 +140,11 @@ def _why_this_matters(finding: dict[str, Any]) -> str:
 
 def build_issue_body(finding: dict[str, Any], *, fingerprint: str) -> str:
     summary = str(finding.get("summary", "")).strip()
-    evidence = [f"- {item.strip()}" for item in finding.get("evidence", []) if str(item).strip()]
+    evidence = [
+        f"- {str(item).strip()}"
+        for item in finding.get("evidence", [])
+        if str(item).strip()
+    ]
     suggested_improvement = str(
         finding.get("proposed_issue_body") or finding.get("recommended_fix") or ""
     ).strip()
@@ -190,46 +194,51 @@ def github_request(
     timeout: tuple[int, int] = DEFAULT_TIMEOUT,
 ) -> Any:
     client = session or requests.Session()
+    owns_session = session is None
     url = f"{GITHUB_API_ROOT}{path}"
     headers = {
         "Accept": "application/vnd.github+json",
         "Authorization": f"Bearer {token}",
         "X-GitHub-Api-Version": "2022-11-28",
     }
-    last_error: Exception | None = None
-    for attempt in range(2):
-        try:
-            response = client.request(
-                method=method,
-                url=url,
-                headers=headers,
-                params=params,
-                json=json_payload,
-                timeout=timeout,
-            )
-        except requests.RequestException as exc:
-            last_error = exc
-            if attempt == 0:
+    try:
+        last_error: Exception | None = None
+        for attempt in range(2):
+            try:
+                response = client.request(
+                    method=method,
+                    url=url,
+                    headers=headers,
+                    params=params,
+                    json=json_payload,
+                    timeout=timeout,
+                )
+            except requests.RequestException as exc:
+                last_error = exc
+                if attempt == 0:
+                    time.sleep(1)
+                    continue
+                raise RuntimeError(f"GitHub API request failed for {method} {path}: {exc}") from exc
+
+            if response.status_code in {429, 500, 502, 503, 504} and attempt == 0:
                 time.sleep(1)
                 continue
-            raise RuntimeError(f"GitHub API request failed for {method} {path}: {exc}") from exc
 
-        if response.status_code in {429, 500, 502, 503, 504} and attempt == 0:
-            time.sleep(1)
-            continue
+            if response.status_code >= 400:
+                detail = response.text.strip()
+                raise RuntimeError(
+                    f"GitHub API request failed for {method} {path}: "
+                    f"status={response.status_code} body={detail}"
+                )
 
-        if response.status_code >= 400:
-            detail = response.text.strip()
-            raise RuntimeError(
-                f"GitHub API request failed for {method} {path}: "
-                f"status={response.status_code} body={detail}"
-            )
+            if response.status_code == 204 or not response.content:
+                return None
+            return response.json()
 
-        if response.status_code == 204 or not response.content:
-            return None
-        return response.json()
-
-    raise RuntimeError(f"GitHub API request failed for {method} {path}: {last_error}")
+        raise RuntimeError(f"GitHub API request failed for {method} {path}: {last_error}")
+    finally:
+        if owns_session:
+            client.close()
 
 
 def list_open_issues(

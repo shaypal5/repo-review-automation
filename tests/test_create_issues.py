@@ -77,6 +77,24 @@ def test_issue_body_contains_hidden_fingerprint_marker() -> None:
     assert f"<!-- repo-review-fingerprint: {fingerprint} -->" in body
 
 
+def test_issue_body_normalizes_non_string_evidence_items() -> None:
+    finding = {
+        "summary": "A summary that is long enough to satisfy the issue body contract.",
+        "severity": "medium",
+        "category": "automation",
+        "confidence": 0.75,
+        "evidence": [" path/to/file.py ", 17],
+        "recommended_fix": (
+            "Normalize evidence items before rendering them into the GitHub issue body."
+        ),
+    }
+
+    body = build_issue_body(finding, fingerprint="abc123")
+
+    assert "- path/to/file.py" in body
+    assert "- 17" in body
+
+
 def test_created_issues_payload_shape(monkeypatch: object) -> None:
     payload = {"findings": [load_json(FIXTURES / "findings_deduped_input.json")["findings"][0]]}
 
