@@ -47,19 +47,36 @@ jobs:
           REPO: ${{ github.repository }}
           TAG: ${{ steps.version.outputs.tag }}
         run: |
-          status=$(gh api -i "repos/$REPO/git/ref/tags/$TAG" 2>/dev/null | head -n 1 | cut -d' ' -f2)
-
-          if [ "$status" = "200" ]; then
+          if tag_sha=$(gh api "repos/$REPO/git/ref/tags/$TAG" --jq .object.sha 2>/dev/null); then
             echo "exists=true" >> "$GITHUB_OUTPUT"
-            tag_sha=$(gh api "repos/$REPO/git/ref/tags/$TAG" --jq .object.sha)
             echo "tag_sha=$tag_sha" >> "$GITHUB_OUTPUT"
-          elif [ "$status" = "404" ]; then
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "tag_sha=" >> "$GITHUB_OUTPUT"
           else
-            echo "Unexpected response while checking tag existence: ${status:-unknown}" >&2
-            exit 1
+            status=$(gh api -i "repos/$REPO/git/ref/tags/$TAG" 2>/dev/null | head -n 1 | cut -d' ' -f2 || true)
+            if [ "$status" = "404" ]; then
+              echo "exists=false" >> "$GITHUB_OUTPUT"
+              echo "tag_sha=" >> "$GITHUB_OUTPUT"
+            else
+              echo "Unexpected response while checking tag existence: ${status:-unknown}" >&2
+              exit 1
+            fi
           fi
+
+      - name: Fail on mismatched existing tag
+        if: steps.tag_check.outputs.exists == 'true' && steps.tag_check.outputs.tag_sha != github.sha
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          TAG_SHA: ${{ steps.tag_check.outputs.tag_sha }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          echo "ERROR: Release tag '$TAG' already exists but points to a different commit." >&2
+          echo "       Tag commit:     $TAG_SHA" >&2
+          echo "       Current commit: $COMMIT_SHA" >&2
+          echo >&2
+          echo "This usually means the version in pyproject.toml does not match the commit being released." >&2
+          echo "To resolve this, either:" >&2
+          echo "  - bump the version in pyproject.toml and push again, or" >&2
+          echo "  - retag '$TAG' to point at commit $COMMIT_SHA (or the correct release commit), then push the tag." >&2
+          exit 1
 
       - name: Create tag on pushed main commit
         if: steps.tag_check.outputs.exists == 'false'
