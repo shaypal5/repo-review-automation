@@ -106,6 +106,26 @@ def load_user_message(context: dict[str, Any]) -> str:
     )
 
 
+def format_openai_error(response: requests.Response) -> str:
+    try:
+        payload = response.json()
+    except ValueError:
+        return response.text.strip() or "<empty response body>"
+
+    if isinstance(payload, dict):
+        error = payload.get("error")
+        if isinstance(error, dict):
+            parts = []
+            for key in ("message", "type", "code", "param"):
+                value = error.get(key)
+                if value is not None:
+                    parts.append(f"{key}={value}")
+            if parts:
+                return ", ".join(parts)
+
+    return json.dumps(payload, sort_keys=True)
+
+
 def call_openai(*, api_key: str, model: str, messages: list[dict[str, str]]) -> dict[str, Any]:
     response = requests.post(
         OPENAI_URL,
@@ -127,15 +147,20 @@ def call_openai(*, api_key: str, model: str, messages: list[dict[str, str]]) -> 
     try:
         response.raise_for_status()
     except requests.HTTPError as exc:
-        status_code = exc.response.status_code if exc.response is not None else response.status_code
+        error_response = exc.response if exc.response is not None else response
+        status_code = error_response.status_code
+        error_details = format_openai_error(error_response)
         if status_code == 401:
             raise RuntimeError(
                 "OpenAI request returned 401 Unauthorized. If the same key succeeds locally "
                 f"against {OPENAI_URL}, compare the GitHub-injected OPENAI_API_KEY "
                 "value with your local key, and verify the key has both 'Model capabilities: "
-                "Request' and 'Chat completions: Request'."
+                f"Request' and 'Chat completions: Request'. Details: {error_details}"
             ) from exc
-        raise
+        raise RuntimeError(
+            f"OpenAI request failed with status {status_code} at {OPENAI_URL}. "
+            f"Details: {error_details}"
+        ) from exc
     payload = response.json()
     content = payload["choices"][0]["message"]["content"]
     return load_json_payload(content)
