@@ -276,6 +276,7 @@ jobs:
         shell: bash
         run: |
           python - <<'PY'
+          import hashlib
           import os
 
           key = os.environ.get("OPENAI_API_KEY", "")
@@ -283,8 +284,11 @@ jobs:
               print("OPENAI_API_KEY is empty")
           else:
               print(f"OPENAI_API_KEY length: {len(key)}")
-              print(f"OPENAI_API_KEY prefix: {key[:6]}")
-              print(f"OPENAI_API_KEY suffix: {key[-6:]}")
+              fingerprint = hashlib.sha256(key.encode("utf-8")).hexdigest()
+              print(
+                  "OPENAI_API_KEY fingerprint (sha256, first 8 chars): "
+                  f"{fingerprint[:8]}"
+              )
           PY
 
           python automation/scripts/run_ai_review.py \
