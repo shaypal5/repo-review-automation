@@ -80,7 +80,7 @@ def process_closed_issue_matches(
     remaining: list[dict[str, Any]] = []
     reopened: list[dict[str, Any]] = []
     seen_issue_numbers: set[int] = set()
-    auth_token = token or github_token_from_env()
+    auth_token: str | None = token
 
     for finding in findings:
         fingerprint = compute_finding_fingerprint(finding)
@@ -93,6 +93,8 @@ def process_closed_issue_matches(
         if issue_number in seen_issue_numbers:
             continue
         seen_issue_numbers.add(issue_number)
+        if auth_token is None:
+            auth_token = github_token_from_env()
         response = reopen_issue(repo, token=auth_token, issue_number=issue_number, session=session)
         reopened.append(
             {

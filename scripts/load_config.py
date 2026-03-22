@@ -242,9 +242,30 @@ def collect_input_overrides(args: argparse.Namespace) -> dict[str, Any]:
     return normalize_mapping(overrides)
 
 
+def resolve_config_path(repo_root: Path, raw_config_path_value: str) -> Path:
+    raw_config_path = Path(raw_config_path_value)
+    if raw_config_path.is_absolute():
+        raise ValueError(
+            "config_path must be a relative path within the repository, "
+            f"got absolute path: {raw_config_path}"
+        )
+
+    config_path = (repo_root / raw_config_path).resolve()
+    try:
+        is_within_repo = config_path.is_relative_to(repo_root)
+    except AttributeError:
+        is_within_repo = repo_root == config_path or repo_root in config_path.parents
+
+    if not is_within_repo:
+        raise ValueError(
+            f"Resolved config_path {config_path} is outside repository root {repo_root}."
+        )
+    return config_path
+
+
 def build_effective_config(args: argparse.Namespace) -> dict[str, Any]:
     repo_root = Path(args.repo_root).resolve()
-    config_path = (repo_root / args.config_path).resolve()
+    config_path = resolve_config_path(repo_root, args.config_path)
     config_found = config_path.is_file()
 
     config_values = normalize_mapping(parse_yaml_config(config_path)) if config_found else {}

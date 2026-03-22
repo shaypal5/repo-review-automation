@@ -105,3 +105,17 @@ def test_unknown_config_keys_fail(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="Unsupported config keys"):
         build_effective_config(make_args(tmp_path))
+
+
+def test_absolute_config_path_is_rejected(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="relative path within the repository"):
+        build_effective_config(
+            make_args(tmp_path, config_path="/tmp/repo-review-config.yml")
+        )
+
+
+def test_parent_traversal_outside_repo_is_rejected(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="outside repository root"):
+        build_effective_config(
+            make_args(tmp_path, config_path="../outside.yml")
+        )

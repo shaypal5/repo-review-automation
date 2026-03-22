@@ -100,3 +100,26 @@ def test_open_issues_are_not_treated_as_reopen_candidates(monkeypatch: object) -
         "reopened_count": 0,
         "issues": [],
     }
+
+
+def test_reopen_disabled_does_not_require_token(monkeypatch: object) -> None:
+    payload = load_json(FIXTURES / "findings_deduped_input.json")
+
+    def fail_github_token_from_env() -> str:
+        raise AssertionError("github_token_from_env should not be called when reopen is disabled")
+
+    monkeypatch.setattr(
+        "scripts.reopen_issues.github_token_from_env",
+        fail_github_token_from_env,
+    )
+
+    actionable, reopened = process_closed_issue_matches(
+        payload,
+        repo="example/repo",
+        reopen_closed_issues=False,
+        existing_closed_issues=[],
+        token=None,
+    )
+
+    assert len(actionable["findings"]) == len(payload["findings"])
+    assert reopened["reopened_count"] == 0

@@ -100,6 +100,33 @@ def test_ignored_paths_filter_only_when_all_evidence_paths_match() -> None:
     ]
 
 
+def test_ignored_paths_match_root_level_repo_relative_evidence() -> None:
+    payload = {
+        "findings": [
+            {
+                "title": "Root level file should be ignored",
+                "summary": "A root-level file path should participate in ignored path filtering.",
+                "severity": "medium",
+                "category": "documentation",
+                "confidence": 0.9,
+                "evidence": ["README.md:12"],
+                "recommended_fix": "Update the root-level README generation flow.",
+            }
+        ]
+    }
+    schema = load_json(Path("schemas/findings.schema.json"))
+
+    processed = process_findings(
+        payload,
+        schema,
+        min_severity="low",
+        max_issues=5,
+        ignored_paths=["README.md"],
+    )
+
+    assert processed["findings"] == []
+
+
 def test_markdown_summary_has_expected_sections() -> None:
     payload = load_json(FIXTURES / "valid_findings.json")
     schema = load_json(Path("schemas/findings.schema.json"))

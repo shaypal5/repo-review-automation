@@ -128,12 +128,14 @@ def extract_repo_relative_evidence_paths(finding: dict[str, Any]) -> list[str]:
     extracted: list[str] = []
     for entry in finding.get("evidence", []):
         text = str(entry).strip().replace("\\", "/")
-        if not text or "/" not in text:
+        if not text:
             continue
         candidate = text.split(":", 1)[0].strip().strip("`'\"()[]{}")
         if not candidate or candidate.startswith(("http://", "https://")):
             continue
         pure_path = PurePosixPath(candidate)
+        if pure_path.is_absolute():
+            continue
         parts = [part for part in pure_path.parts if part not in {"", "."}]
         if not parts or any(part == ".." for part in parts):
             continue
