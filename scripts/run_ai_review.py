@@ -60,6 +60,7 @@ def build_schema() -> dict[str, Any]:
                             "summary",
                             "evidence",
                             "recommended_fix",
+                            "proposed_issue_body",
                         ],
                         "properties": {
                             "title": {"type": "string", "minLength": 5},
