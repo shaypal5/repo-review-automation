@@ -275,6 +275,22 @@ jobs:
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4.1-mini' }}
         shell: bash
         run: |
+          python - <<'PY'
+          import hashlib
+          import os
+
+          key = os.environ.get("OPENAI_API_KEY", "")
+          if not key:
+              print("OPENAI_API_KEY is empty")
+          else:
+              print(f"OPENAI_API_KEY length: {len(key)}")
+              fingerprint = hashlib.sha256(key.encode("utf-8")).hexdigest()
+              print(
+                  "OPENAI_API_KEY fingerprint (sha256, first 8 chars): "
+                  f"{fingerprint[:8]}"
+              )
+          PY
+
           python automation/scripts/run_ai_review.py \
             --prompt-file "${{ steps.prompt.outputs.file }}" \
             --context-file out/review_context.json \
