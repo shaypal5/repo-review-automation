@@ -272,9 +272,7 @@ For a restricted OpenAI API key, the minimum required permission set is:
 
 - `Chat completions (/v1/chat/completions)`: `Request`
 
-Everything else can remain:
-
-- `None`
+All other OpenAI API key permissions can remain set to `None` (disabled).
 
 You do not need `Responses`, `Assistants`, `Threads`, `Files`, `Embeddings`, `Moderations`, or media-related permissions for the current workflow.
 
