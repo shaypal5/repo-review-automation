@@ -348,7 +348,6 @@ jobs:
 
       - name: Render summary comment artifact
         if: ${{ !inputs.create_issues }}
-        env:
         shell: bash
         run: |
           python automation/scripts/post_summary_comment.py \
