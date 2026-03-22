@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import jsonschema
@@ -52,6 +52,21 @@ def parse_args() -> argparse.Namespace:
         required=False,
         help="Optional review_context.json path for repository metadata in markdown output.",
     )
+    parser.add_argument(
+        "--ignored-categories",
+        required=False,
+        default="",
+        help="Comma-separated normalized finding categories to suppress.",
+    )
+    parser.add_argument(
+        "--ignored-paths",
+        required=False,
+        default="",
+        help=(
+            "Comma-separated repository-relative path prefixes to suppress when all "
+            "evidence paths match."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -89,6 +104,73 @@ def normalize_finding(finding: dict[str, Any]) -> dict[str, Any]:
     if "proposed_issue_body" in finding and finding["proposed_issue_body"] is not None:
         normalized["proposed_issue_body"] = str(finding["proposed_issue_body"]).strip()
     return normalized
+
+
+def parse_csv_list(raw_value: str) -> list[str]:
+    return [item.strip() for item in raw_value.split(",") if item.strip()]
+
+
+def normalize_ignored_categories(raw_value: str) -> set[str]:
+    return {item.lower().replace(" ", "_") for item in parse_csv_list(raw_value)}
+
+
+def normalize_ignored_paths(raw_value: str) -> list[str]:
+    normalized: list[str] = []
+    for item in parse_csv_list(raw_value):
+        path = str(PurePosixPath(item.strip("/")))
+        if path == ".":
+            continue
+        normalized.append(path)
+    return normalized
+
+
+def extract_repo_relative_evidence_paths(finding: dict[str, Any]) -> list[str]:
+    extracted: list[str] = []
+    for entry in finding.get("evidence", []):
+        text = str(entry).strip().replace("\\", "/")
+        if not text or "/" not in text:
+            continue
+        candidate = text.split(":", 1)[0].strip().strip("`'\"()[]{}")
+        if not candidate or candidate.startswith(("http://", "https://")):
+            continue
+        pure_path = PurePosixPath(candidate)
+        parts = [part for part in pure_path.parts if part not in {"", "."}]
+        if not parts or any(part == ".." for part in parts):
+            continue
+        extracted.append("/".join(parts))
+    return extracted
+
+
+def is_ignored_by_paths(finding: dict[str, Any], ignored_prefixes: list[str]) -> bool:
+    if not ignored_prefixes:
+        return False
+    evidence_paths = extract_repo_relative_evidence_paths(finding)
+    if not evidence_paths:
+        return False
+    for path in evidence_paths:
+        matched = any(
+            path == prefix or path.startswith(f"{prefix}/")
+            for prefix in ignored_prefixes
+        )
+        if not matched:
+            return False
+    return True
+
+
+def apply_ignored_filters(
+    findings: list[dict[str, Any]],
+    *,
+    ignored_categories: set[str],
+    ignored_paths: list[str],
+) -> list[dict[str, Any]]:
+    filtered: list[dict[str, Any]] = []
+    for finding in findings:
+        if finding["category"] in ignored_categories:
+            continue
+        if is_ignored_by_paths(finding, ignored_paths):
+            continue
+        filtered.append(finding)
+    return filtered
 
 
 def validate_findings(payload: dict[str, Any], schema: dict[str, Any]) -> None:
@@ -165,9 +247,20 @@ def render_summary(
 
 
 def process_findings(
-    raw_payload: dict[str, Any], schema: dict[str, Any], *, min_severity: str, max_issues: int
+    raw_payload: dict[str, Any],
+    schema: dict[str, Any],
+    *,
+    min_severity: str,
+    max_issues: int,
+    ignored_categories: set[str] | None = None,
+    ignored_paths: list[str] | None = None,
 ) -> dict[str, Any]:
     normalized_findings = [normalize_finding(item) for item in raw_payload["findings"]]
+    normalized_findings = apply_ignored_filters(
+        normalized_findings,
+        ignored_categories=ignored_categories or set(),
+        ignored_paths=ignored_paths or [],
+    )
     normalized_payload = {
         "findings": filter_findings(
             normalized_findings,
@@ -190,6 +283,8 @@ def main() -> None:
         schema,
         min_severity=args.min_severity,
         max_issues=args.max_issues,
+        ignored_categories=normalize_ignored_categories(args.ignored_categories),
+        ignored_paths=normalize_ignored_paths(args.ignored_paths),
     )
     context = load_json(Path(args.context)) if args.context else None
     dump_json(Path(args.output), processed)

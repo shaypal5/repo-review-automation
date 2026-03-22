@@ -1,0 +1,14 @@
+[
+  {
+    "number": 12,
+    "title": "[Repo Review] GitHub API calls do not retry transient failures",
+    "html_url": "https://github.com/example/repo/issues/12",
+    "body": "## Summary\nExample\n\n<!-- repo-review-fingerprint: __FINGERPRINT__ -->\n"
+  },
+  {
+    "number": 22,
+    "title": "[Repo Review] Unrelated closed issue",
+    "html_url": "https://github.com/example/repo/issues/22",
+    "body": "No fingerprint marker here."
+  }
+]

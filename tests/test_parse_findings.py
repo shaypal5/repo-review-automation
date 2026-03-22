@@ -46,6 +46,60 @@ def test_max_findings_cap_works() -> None:
     assert len(processed["findings"]) == 2
 
 
+def test_ignored_categories_are_filtered() -> None:
+    payload = load_json(FIXTURES / "valid_findings.json")
+    schema = load_json(Path("schemas/findings.schema.json"))
+    processed = process_findings(
+        payload,
+        schema,
+        min_severity="low",
+        max_issues=5,
+        ignored_categories={"maintainability"},
+    )
+    assert {item["category"] for item in processed["findings"]} == {
+        "reliability",
+        "developer_experience",
+    }
+
+
+def test_ignored_paths_filter_only_when_all_evidence_paths_match() -> None:
+    payload = {
+        "findings": [
+            {
+                "title": "Generated docs drift",
+                "summary": "Generated docs keep drifting from source changes.",
+                "severity": "medium",
+                "category": "documentation",
+                "confidence": 0.9,
+                "evidence": ["docs/generated/api.md", "docs/generated/schema.md:14"],
+                "recommended_fix": "Regenerate docs in CI.",
+            },
+            {
+                "title": "Mixed evidence remains actionable",
+                "summary": "One evidence path is ignored but another is not.",
+                "severity": "medium",
+                "category": "automation",
+                "confidence": 0.8,
+                "evidence": ["docs/generated/api.md", "src/service.py:44"],
+                "recommended_fix": "Handle both sources explicitly.",
+            },
+        ]
+    }
+    schema = load_json(Path("schemas/findings.schema.json"))
+
+    processed = process_findings(
+        payload,
+        schema,
+        min_severity="low",
+        max_issues=5,
+        ignored_paths=["docs/generated"],
+    )
+
+    assert [item["title"] for item in processed["findings"]] == [
+        "Mixed evidence remains actionable"
+    ]
+
+
 def test_markdown_summary_has_expected_sections() -> None:
     payload = load_json(FIXTURES / "valid_findings.json")
     schema = load_json(Path("schemas/findings.schema.json"))

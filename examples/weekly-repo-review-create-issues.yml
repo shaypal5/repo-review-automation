@@ -16,14 +16,7 @@ jobs:
     uses: your-org/repo-review-automation/.github/workflows/repo-review.yml@main
     with:
       create_issues: true
-      review_mode: full
       prompt_preset: python
-      min_severity: medium
-      max_issues: 5
-      labels: ai-review,triage
-      paths: .
-      python_version: "3.11"
-      upload_artifacts: true
       dedupe_mode: fingerprint
-      issue_prefix: "[Repo Review]"
+      labels: ai-review,triage
     secrets: inherit

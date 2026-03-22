@@ -1,12 +1,11 @@
-name: Weekly Repo Review
+name: Weekly Repo Review Summary Comment
 
 on:
-  schedule:
-    - cron: "0 6 * * 1"
   workflow_dispatch:
 
 permissions:
   contents: read
+  issues: write
   pull-requests: read
   security-events: read
 
@@ -15,4 +14,6 @@ jobs:
     uses: your-org/repo-review-automation/.github/workflows/repo-review.yml@main
     with:
       create_issues: false
+      comment_mode: summary
+      comment_issue_number: "42"
     secrets: inherit

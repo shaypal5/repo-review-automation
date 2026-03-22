@@ -1,4 +1,4 @@
-name: Weekly Repo Review
+name: Weekly Repo Review With Reopen
 
 on:
   schedule:
@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
   pull-requests: read
   security-events: read
 
@@ -14,5 +15,8 @@ jobs:
   weekly-review:
     uses: your-org/repo-review-automation/.github/workflows/repo-review.yml@main
     with:
-      create_issues: false
+      create_issues: true
+      prompt_preset: python
+      dedupe_mode: fingerprint
+      reopen_closed_issues: "true"
     secrets: inherit

@@ -4,40 +4,40 @@ on:
   workflow_call:
     inputs:
       create_issues:
-        description: Enable dedupe and issue creation for accepted findings.
+        description: Enable dedupe, closed-issue reopen handling, and issue creation for accepted findings.
         required: false
         type: boolean
         default: false
       review_mode:
-        description: Review depth mode passed into the context builder.
+        description: Explicit review depth override. Empty uses repo config or workflow default.
         required: false
         type: string
-        default: full
+        default: ""
       prompt_preset:
-        description: Prompt file preset name under prompts/.
+        description: Explicit prompt preset override. Empty uses repo config or workflow default.
         required: false
         type: string
-        default: default
+        default: ""
       min_severity:
-        description: Minimum severity threshold for final findings.
+        description: Explicit minimum severity override. Empty uses repo config or workflow default.
         required: false
         type: string
-        default: medium
+        default: ""
       max_issues:
-        description: Maximum number of findings to report. Must be an integer value.
+        description: Explicit maximum findings override. Empty uses repo config or workflow default.
         required: false
-        type: number
-        default: 5
+        type: string
+        default: ""
       labels:
-        description: Comma-separated labels applied to created issues.
+        description: Explicit comma-separated issue label override. Empty uses repo config or workflow default.
         required: false
         type: string
-        default: ai-review
+        default: ""
       paths:
-        description: Relative repository paths to review. Supports comma or whitespace separation.
+        description: Explicit relative repository paths override. Empty uses repo config or workflow default.
         required: false
         type: string
-        default: .
+        default: ""
       python_version:
         description: Python version used for helper scripts.
         required: false
@@ -49,15 +49,45 @@ on:
         type: boolean
         default: true
       dedupe_mode:
-        description: Dedupe behavior for issue creation candidates.
+        description: Explicit dedupe mode override. Empty uses repo config or workflow default.
         required: false
         type: string
-        default: title_hash
+        default: ""
       issue_prefix:
-        description: Prefix used for created issue titles.
+        description: Explicit issue title prefix override. Empty uses repo config or workflow default.
         required: false
         type: string
-        default: "[Repo Review]"
+        default: ""
+      comment_mode:
+        description: Explicit summary comment mode override. Empty uses repo config or workflow default.
+        required: false
+        type: string
+        default: ""
+      comment_issue_number:
+        description: Explicit issue number override for summary comments.
+        required: false
+        type: string
+        default: ""
+      reopen_closed_issues:
+        description: Explicit closed-issue reopen override. Empty uses repo config or workflow default.
+        required: false
+        type: string
+        default: ""
+      config_path:
+        description: Caller-repository config path.
+        required: false
+        type: string
+        default: ".github/repo-review.yml"
+      ignored_paths:
+        description: Explicit comma-separated ignored path prefixes override.
+        required: false
+        type: string
+        default: ""
+      ignored_categories:
+        description: Explicit comma-separated ignored categories override.
+        required: false
+        type: string
+        default: ""
     outputs:
       findings_count:
         description: Number of findings after normalization and filtering.
@@ -80,6 +110,18 @@ on:
       created_issues_json_path:
         description: Relative path to the created issues JSON artifact payload.
         value: ${{ jobs.review.outputs.created_issues_json_path }}
+      reopened_issue_count:
+        description: Number of previously closed GitHub issues reopened for resurfaced findings.
+        value: ${{ jobs.create_issues.outputs.reopened_issue_count || jobs.review.outputs.reopened_issue_count }}
+      reopened_issue_numbers:
+        description: JSON array of reopened GitHub issue numbers.
+        value: ${{ jobs.create_issues.outputs.reopened_issue_numbers || jobs.review.outputs.reopened_issue_numbers }}
+      comment_posted:
+        description: Whether the workflow posted or updated a GitHub summary comment.
+        value: ${{ jobs.create_issues.outputs.comment_posted || jobs.review.outputs.comment_posted }}
+      comment_url:
+        description: URL of the posted or updated GitHub summary comment, when available.
+        value: ${{ jobs.create_issues.outputs.comment_url || jobs.review.outputs.comment_url }}
 
 permissions:
   contents: read
@@ -91,6 +133,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      issues: write
       pull-requests: read
       security-events: read
     outputs:
@@ -101,6 +144,10 @@ jobs:
       created_issue_numbers: ${{ steps.finalize.outputs.created_issue_numbers }}
       deduped_findings_json_path: ${{ steps.finalize.outputs.deduped_findings_json_path }}
       created_issues_json_path: ${{ steps.finalize.outputs.created_issues_json_path }}
+      reopened_issue_count: ${{ steps.finalize.outputs.reopened_issue_count }}
+      reopened_issue_numbers: ${{ steps.finalize.outputs.reopened_issue_numbers }}
+      comment_posted: ${{ steps.finalize.outputs.comment_posted }}
+      comment_url: ${{ steps.finalize.outputs.comment_url }}
     steps:
       - name: Resolve automation repository reference
         id: workflow_ref
@@ -132,43 +179,77 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip
-          python -m pip install jsonschema requests
+          python -m pip install jsonschema PyYAML requests
+
+      - name: Load and merge repo-local config
+        shell: bash
+        run: |
+          mkdir -p out/signals
+          python automation/scripts/load_config.py \
+            --repo-root caller \
+            --config-path "${{ inputs.config_path }}" \
+            --review-mode "${{ inputs.review_mode }}" \
+            --prompt-preset "${{ inputs.prompt_preset }}" \
+            --min-severity "${{ inputs.min_severity }}" \
+            --max-issues "${{ inputs.max_issues }}" \
+            --labels "${{ inputs.labels }}" \
+            --paths "${{ inputs.paths }}" \
+            --dedupe-mode "${{ inputs.dedupe_mode }}" \
+            --issue-prefix "${{ inputs.issue_prefix }}" \
+            --comment-mode "${{ inputs.comment_mode }}" \
+            --comment-issue-number "${{ inputs.comment_issue_number }}" \
+            --reopen-closed-issues "${{ inputs.reopen_closed_issues }}" \
+            --ignored-paths "${{ inputs.ignored_paths }}" \
+            --ignored-categories "${{ inputs.ignored_categories }}" \
+            --output out/effective_config.json
+
+      - name: Materialize effective config
+        id: config
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path("out/effective_config.json").read_text(encoding="utf-8"))
+          for key in (
+              "review_mode",
+              "prompt_preset",
+              "min_severity",
+              "max_issues",
+              "labels_csv",
+              "paths_arg",
+              "dedupe_mode",
+              "issue_prefix",
+              "comment_mode",
+              "ignored_paths_csv",
+              "ignored_categories_csv",
+          ):
+              print(f"{key}={payload[key]}")
+          print(f"comment_issue_number={payload['comment_issue_number'] or ''}")
+          print(
+              "reopen_closed_issues="
+              + ("true" if payload["reopen_closed_issues"] else "false")
+          )
+          PY
 
       - name: Resolve prompt preset
         id: prompt
         shell: bash
         run: |
-          prompt_file="automation/prompts/${{ inputs.prompt_preset }}_review_prompt.md"
+          prompt_file="automation/prompts/${{ steps.config.outputs.prompt_preset }}_review_prompt.md"
           if [[ ! -f "$prompt_file" ]]; then
-            echo "Unknown prompt preset: ${{ inputs.prompt_preset }}" >&2
+            echo "Unknown prompt preset: ${{ steps.config.outputs.prompt_preset }}" >&2
             exit 1
           fi
           echo "file=$prompt_file" >> "$GITHUB_OUTPUT"
 
-      - name: Validate integer inputs
-        id: validated
-        shell: bash
-        run: |
-          python - <<'PY' >> "$GITHUB_OUTPUT"
-          max_issues = "${{ inputs.max_issues }}"
-          try:
-              numeric_value = float(max_issues)
-          except ValueError as exc:
-              raise SystemExit(f"max_issues must be numeric, got: {max_issues!r}") from exc
-          if not numeric_value.is_integer():
-              raise SystemExit(
-                  f"max_issues must be an integer-compatible value, got: {max_issues!r}"
-              )
-          print(f"max_issues={int(numeric_value)}")
-          PY
-
       - name: Collect deterministic signals
         shell: bash
         run: |
-          mkdir -p out/signals
           bash automation/scripts/collect_signals.sh \
             --repo-root caller \
-            --paths "${{ inputs.paths }}" \
+            --paths "${{ steps.config.outputs.paths_arg }}" \
             --output-dir out/signals
 
       - name: Build review context
@@ -177,10 +258,10 @@ jobs:
           python automation/scripts/build_review_context.py \
             --artifacts-dir out/signals \
             --repo-root caller \
-            --paths "${{ inputs.paths }}" \
-            --review-mode "${{ inputs.review_mode }}" \
-            --max-issues "${{ steps.validated.outputs.max_issues }}" \
-            --prompt-preset "${{ inputs.prompt_preset }}" \
+            --paths "${{ steps.config.outputs.paths_arg }}" \
+            --review-mode "${{ steps.config.outputs.review_mode }}" \
+            --max-issues "${{ steps.config.outputs.max_issues }}" \
+            --prompt-preset "${{ steps.config.outputs.prompt_preset }}" \
             --output out/review_context.json
 
       - name: Run AI review
@@ -200,8 +281,10 @@ jobs:
           python automation/scripts/parse_findings.py \
             --input out/raw_findings.json \
             --schema automation/schemas/findings.schema.json \
-            --min-severity "${{ inputs.min_severity }}" \
-            --max-issues "${{ steps.validated.outputs.max_issues }}" \
+            --min-severity "${{ steps.config.outputs.min_severity }}" \
+            --max-issues "${{ steps.config.outputs.max_issues }}" \
+            --ignored-categories "${{ steps.config.outputs.ignored_categories_csv }}" \
+            --ignored-paths "${{ steps.config.outputs.ignored_paths_csv }}" \
             --context out/review_context.json \
             --output out/findings.json \
             --summary out/findings.md
@@ -216,7 +299,7 @@ jobs:
             --output out/findings_deduped.json \
             --report out/dedupe_report.json
 
-      - name: Initialize empty created issues payload
+      - name: Initialize empty issue and comment payloads
         shell: bash
         run: |
           python - <<'PY'
@@ -235,14 +318,56 @@ jobs:
                   "issues": [],
               },
           )
+          dump_json(
+              Path("out/reopened_issues.json"),
+              {
+                  "repo": "${{ github.repository }}",
+                  "reopen_closed_issues": False,
+                  "reopened_count": 0,
+                  "issues": [],
+              },
+          )
+          dump_json(
+              Path("out/comment_result.json"),
+              {
+                  "posted": False,
+                  "action": "skipped",
+                  "comment_id": None,
+                  "comment_url": None,
+                  "comment_issue_number": None,
+                  "reason": "not_attempted",
+              },
+          )
+          Path("out/summary_comment.md").write_text("", encoding="utf-8")
           PY
+
+      - name: Render or post summary comment
+        if: ${{ !inputs.create_issues }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          python automation/scripts/post_summary_comment.py \
+            --repo "${{ github.repository }}" \
+            --findings out/findings.json \
+            --dedupe-report out/dedupe_report.json \
+            --created-issues out/created_issues.json \
+            --reopened-issues out/reopened_issues.json \
+            --review-mode "${{ steps.config.outputs.review_mode }}" \
+            --comment-mode "${{ steps.config.outputs.comment_mode }}" \
+            --comment-issue-number "${{ steps.config.outputs.comment_issue_number }}" \
+            --summary-output out/summary_comment.md \
+            --result-output out/comment_result.json
+          cat out/summary_comment.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload findings for create-issues job
         if: ${{ inputs.create_issues }}
         uses: actions/upload-artifact@v4
         with:
           name: _review-findings-passthrough
-          path: out/findings.json
+          path: |
+            out/findings.json
+            out/effective_config.json
 
       - name: Upload artifacts
         if: ${{ inputs.upload_artifacts }}
@@ -256,7 +381,11 @@ jobs:
             out/findings_deduped.json
             out/findings.md
             out/dedupe_report.json
+            out/effective_config.json
             out/created_issues.json
+            out/reopened_issues.json
+            out/summary_comment.md
+            out/comment_result.json
             out/signals
 
       - name: Finalize outputs
@@ -284,6 +413,34 @@ jobs:
           print(int(payload.get("created_count", 0)))
           PY
           )"
+          reopened_issue_numbers="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path("out/reopened_issues.json").read_text(encoding="utf-8"))
+          print(json.dumps([item["number"] for item in payload.get("issues", [])]))
+          PY
+          )"
+          reopened_issue_count="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path("out/reopened_issues.json").read_text(encoding="utf-8"))
+          print(int(payload.get("reopened_count", 0)))
+          PY
+          )"
+          comment_posted="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path("out/comment_result.json").read_text(encoding="utf-8"))
+          print("true" if payload.get("posted") else "false")
+          PY
+          )"
+          comment_url="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path("out/comment_result.json").read_text(encoding="utf-8"))
+          print(payload.get("comment_url") or "")
+          PY
+          )"
           echo "findings_count=${findings_count}" >> "$GITHUB_OUTPUT"
           echo "summary_markdown_path=out/findings.md" >> "$GITHUB_OUTPUT"
           echo "findings_json_path=out/findings.json" >> "$GITHUB_OUTPUT"
@@ -291,6 +448,10 @@ jobs:
           echo "created_issue_numbers=${created_issue_numbers}" >> "$GITHUB_OUTPUT"
           echo "deduped_findings_json_path=out/findings_deduped.json" >> "$GITHUB_OUTPUT"
           echo "created_issues_json_path=out/created_issues.json" >> "$GITHUB_OUTPUT"
+          echo "reopened_issue_count=${reopened_issue_count}" >> "$GITHUB_OUTPUT"
+          echo "reopened_issue_numbers=${reopened_issue_numbers}" >> "$GITHUB_OUTPUT"
+          echo "comment_posted=${comment_posted}" >> "$GITHUB_OUTPUT"
+          echo "comment_url=${comment_url}" >> "$GITHUB_OUTPUT"
 
   create_issues:
     runs-on: ubuntu-latest
@@ -302,6 +463,10 @@ jobs:
     outputs:
       created_issue_count: ${{ steps.finalize.outputs.created_issue_count }}
       created_issue_numbers: ${{ steps.finalize.outputs.created_issue_numbers }}
+      reopened_issue_count: ${{ steps.finalize.outputs.reopened_issue_count }}
+      reopened_issue_numbers: ${{ steps.finalize.outputs.reopened_issue_numbers }}
+      comment_posted: ${{ steps.finalize.outputs.comment_posted }}
+      comment_url: ${{ steps.finalize.outputs.comment_url }}
     steps:
       - name: Resolve automation repository reference
         id: workflow_ref
@@ -327,7 +492,7 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip
-          python -m pip install jsonschema requests
+          python -m pip install jsonschema PyYAML requests
 
       - name: Download findings from review job
         if: ${{ !inputs.upload_artifacts }}
@@ -343,6 +508,30 @@ jobs:
           name: repo-review-report
           path: .
 
+      - name: Materialize effective config
+        id: config
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path("out/effective_config.json").read_text(encoding="utf-8"))
+          for key in (
+              "review_mode",
+              "labels_csv",
+              "dedupe_mode",
+              "issue_prefix",
+              "comment_mode",
+          ):
+              print(f"{key}={payload[key]}")
+          print(f"comment_issue_number={payload['comment_issue_number'] or ''}")
+          print(
+              "reopen_closed_issues="
+              + ("true" if payload["reopen_closed_issues"] else "false")
+          )
+          PY
+
       - name: Dedupe findings against open issues
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -351,21 +540,51 @@ jobs:
           python automation/scripts/dedupe_findings.py \
             --repo "${{ github.repository }}" \
             --input out/findings.json \
-            --mode "${{ inputs.dedupe_mode }}" \
+            --mode "${{ steps.config.outputs.dedupe_mode }}" \
             --output out/findings_deduped.json \
             --report out/dedupe_report.json
 
-      - name: Create GitHub issues from deduped findings
+      - name: Reopen matching closed issues
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          python automation/scripts/reopen_issues.py \
+            --repo "${{ github.repository }}" \
+            --input out/findings_deduped.json \
+            --reopen-closed-issues "${{ steps.config.outputs.reopen_closed_issues }}" \
+            --output out/findings_actionable.json \
+            --reopened-output out/reopened_issues.json
+
+      - name: Create GitHub issues from remaining findings
         env:
           GITHUB_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           python automation/scripts/create_issues.py \
             --repo "${{ github.repository }}" \
-            --input out/findings_deduped.json \
-            --labels "${{ inputs.labels }}" \
-            --issue-prefix "${{ inputs.issue_prefix }}" \
+            --input out/findings_actionable.json \
+            --labels "${{ steps.config.outputs.labels_csv }}" \
+            --issue-prefix "${{ steps.config.outputs.issue_prefix }}" \
             --output out/created_issues.json
+
+      - name: Render or post summary comment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          python automation/scripts/post_summary_comment.py \
+            --repo "${{ github.repository }}" \
+            --findings out/findings.json \
+            --dedupe-report out/dedupe_report.json \
+            --created-issues out/created_issues.json \
+            --reopened-issues out/reopened_issues.json \
+            --review-mode "${{ steps.config.outputs.review_mode }}" \
+            --comment-mode "${{ steps.config.outputs.comment_mode }}" \
+            --comment-issue-number "${{ steps.config.outputs.comment_issue_number }}" \
+            --summary-output out/summary_comment.md \
+            --result-output out/comment_result.json
+          cat out/summary_comment.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload updated artifacts
         if: ${{ inputs.upload_artifacts }}
@@ -377,9 +596,14 @@ jobs:
             out/raw_findings.json
             out/findings.json
             out/findings_deduped.json
+            out/findings_actionable.json
             out/findings.md
             out/dedupe_report.json
+            out/effective_config.json
             out/created_issues.json
+            out/reopened_issues.json
+            out/summary_comment.md
+            out/comment_result.json
             out/signals
           overwrite: true
 
@@ -401,5 +625,37 @@ jobs:
           print(int(payload.get("created_count", 0)))
           PY
           )"
+          reopened_issue_numbers="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path("out/reopened_issues.json").read_text(encoding="utf-8"))
+          print(json.dumps([item["number"] for item in payload.get("issues", [])]))
+          PY
+          )"
+          reopened_issue_count="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path("out/reopened_issues.json").read_text(encoding="utf-8"))
+          print(int(payload.get("reopened_count", 0)))
+          PY
+          )"
+          comment_posted="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path("out/comment_result.json").read_text(encoding="utf-8"))
+          print("true" if payload.get("posted") else "false")
+          PY
+          )"
+          comment_url="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path("out/comment_result.json").read_text(encoding="utf-8"))
+          print(payload.get("comment_url") or "")
+          PY
+          )"
           echo "created_issue_count=${created_issue_count}" >> "$GITHUB_OUTPUT"
           echo "created_issue_numbers=${created_issue_numbers}" >> "$GITHUB_OUTPUT"
+          echo "reopened_issue_count=${reopened_issue_count}" >> "$GITHUB_OUTPUT"
+          echo "reopened_issue_numbers=${reopened_issue_numbers}" >> "$GITHUB_OUTPUT"
+          echo "comment_posted=${comment_posted}" >> "$GITHUB_OUTPUT"
+          echo "comment_url=${comment_url}" >> "$GITHUB_OUTPUT"
