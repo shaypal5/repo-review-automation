@@ -275,6 +275,18 @@ jobs:
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4.1-mini' }}
         shell: bash
         run: |
+          python - <<'PY'
+          import os
+
+          key = os.environ.get("OPENAI_API_KEY", "")
+          if not key:
+              print("OPENAI_API_KEY is empty")
+          else:
+              print(f"OPENAI_API_KEY length: {len(key)}")
+              print(f"OPENAI_API_KEY prefix: {key[:6]}")
+              print(f"OPENAI_API_KEY suffix: {key[-6:]}")
+          PY
+
           python automation/scripts/run_ai_review.py \
             --prompt-file "${{ steps.prompt.outputs.file }}" \
             --context-file out/review_context.json \

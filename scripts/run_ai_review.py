@@ -124,7 +124,17 @@ def call_openai(*, api_key: str, model: str, messages: list[dict[str, str]]) -> 
         },
         timeout=120,
     )
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+    except requests.HTTPError as exc:
+        if response.status_code == 401:
+            raise RuntimeError(
+                "OpenAI request returned 401 Unauthorized. If the same key succeeds locally "
+                "against /v1/chat/completions, compare the GitHub-injected OPENAI_API_KEY "
+                "value with your local key, and verify the key has both 'Model capabilities: "
+                "Request' and 'Chat completions: Request'."
+            ) from exc
+        raise
     payload = response.json()
     content = payload["choices"][0]["message"]["content"]
     return load_json_payload(content)
