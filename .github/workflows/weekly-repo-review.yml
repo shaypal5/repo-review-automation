@@ -13,6 +13,7 @@ permissions:
 
 jobs:
   weekly-review:
+    environment: repo-review
     uses: ./.github/workflows/repo-review.yml
     with:
       create_issues: true
