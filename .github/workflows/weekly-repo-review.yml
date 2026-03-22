@@ -13,7 +13,8 @@ permissions:
 
 jobs:
   weekly-review:
-    uses: shaypal5/repo-review-automation/.github/workflows/repo-review.yml@main
+    uses: ./.github/workflows/repo-review.yml
     with:
       create_issues: true
-    secrets: inherit
+    secrets:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
