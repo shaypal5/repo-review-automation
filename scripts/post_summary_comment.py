@@ -98,8 +98,7 @@ def render_summary_comment(
         "## Top findings",
     ]
     lines.extend(
-        summarize_top_findings(findings_payload)
-        or ["- No findings met the current filters."]
+        summarize_top_findings(findings_payload) or ["- No findings met the current filters."]
     )
     lines.extend(
         [

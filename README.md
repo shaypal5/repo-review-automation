@@ -25,15 +25,15 @@ Milestone 3 preserves all existing Milestone 2 behavior:
 
 The reusable workflow now runs this sequence:
 
-1. resolve the automation repository and ref from `github.workflow_ref`
-2. check out `automation/` and `caller/`
-3. set up Python and install helper dependencies
-4. load and merge repo-local configuration into `out/effective_config.json`
-5. collect deterministic signals into `out/signals/`
-6. build `out/review_context.json`
-7. call the AI model to produce `out/raw_findings.json`
-8. validate, normalize, severity-filter, and ignore-filter findings into `out/findings.json`
-9. render `out/findings.md`
+01. resolve the automation repository and ref from `github.workflow_ref`
+02. check out `automation/` and `caller/`
+03. set up Python and install helper dependencies
+04. load and merge repo-local configuration into `out/effective_config.json`
+05. collect deterministic signals into `out/signals/`
+06. build `out/review_context.json`
+07. call the AI model to produce `out/raw_findings.json`
+08. validate, normalize, severity-filter, and ignore-filter findings into `out/findings.json`
+09. render `out/findings.md`
 10. emit `out/findings_deduped.json` in report-only mode and initialize empty issue/comment artifacts
 11. when `create_issues=true`, dedupe against open issues, inspect closed issues, optionally reopen matches, and create new issues for the remaining findings
 12. render or post a single summary comment when configured

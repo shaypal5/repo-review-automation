@@ -149,8 +149,7 @@ def is_ignored_by_paths(finding: dict[str, Any], ignored_prefixes: list[str]) ->
         return False
     for path in evidence_paths:
         matched = any(
-            path == prefix or path.startswith(f"{prefix}/")
-            for prefix in ignored_prefixes
+            path == prefix or path.startswith(f"{prefix}/") for prefix in ignored_prefixes
         )
         if not matched:
             return False

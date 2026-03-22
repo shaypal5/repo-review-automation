@@ -61,7 +61,10 @@ def test_post_summary_comment_updates_existing_marker_comment(monkeypatch: objec
         session: object | None = None,
     ) -> dict[str, object]:
         captured.append({"repo": repo, "comment_id": comment_id, "body": body})
-        return {"id": comment_id, "html_url": "https://github.com/example/repo/issues/9#issuecomment-7"}
+        return {
+            "id": comment_id,
+            "html_url": "https://github.com/example/repo/issues/9#issuecomment-7",
+        }
 
     monkeypatch.setattr(
         "scripts.post_summary_comment.list_issue_comments",
