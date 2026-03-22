@@ -270,7 +270,10 @@ The current implementation calls the Chat Completions API directly at `/v1/chat/
 
 For a restricted OpenAI API key, the minimum required permission set is:
 
+- `Model capabilities`: `Request`
 - `Chat completions (/v1/chat/completions)`: `Request`
+
+Important: setting only the `Chat completions` row to `Request` is not enough. The parent `Model capabilities` permission group must also be set to `Request`, otherwise the key will still be missing the broader `model.request` scope and OpenAI will reject the request.
 
 All other OpenAI API key permissions can remain set to `None` (disabled).
 
