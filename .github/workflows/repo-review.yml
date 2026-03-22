@@ -514,14 +514,14 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: repo-review-report
-          path: .
+          path: out
 
       - name: Download review findings fallback
         if: ${{ !inputs.upload_artifacts }}
         uses: actions/download-artifact@v4
         with:
           name: _review-findings-passthrough
-          path: .
+          path: out
 
       - name: Initialize missing report-only artifacts when needed
         if: ${{ !inputs.upload_artifacts }}
@@ -678,14 +678,14 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: _review-findings-passthrough
-          path: .
+          path: out
 
       - name: Download review artifacts for update
         if: ${{ inputs.upload_artifacts }}
         uses: actions/download-artifact@v4
         with:
           name: repo-review-report
-          path: .
+          path: out
 
       - name: Materialize effective config
         id: config
