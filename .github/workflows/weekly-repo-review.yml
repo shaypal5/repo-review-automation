@@ -1,0 +1,21 @@
+name: Weekly Repo Review
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  security-events: read
+
+jobs:
+  weekly-review:
+    environment: repo-review
+    uses: ./.github/workflows/repo-review.yml
+    with:
+      create_issues: true
+    secrets:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
