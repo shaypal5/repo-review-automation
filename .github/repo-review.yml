@@ -7,6 +7,8 @@ labels:
   - maintenance
 dedupe_mode: fingerprint
 issue_prefix: "[Repo Review]"
+comment_mode: summary
+comment_issue_number: 12
 reopen_closed_issues: true
 ignored_paths:
   - docs/generated/
