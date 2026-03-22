@@ -112,15 +112,16 @@ def format_openai_error(response: requests.Response) -> str:
     except ValueError:
         return response.text.strip() or "<empty response body>"
 
-    error = payload.get("error")
-    if isinstance(error, dict):
-        parts = []
-        for key in ("message", "type", "code", "param"):
-            value = error.get(key)
-            if value is not None:
-                parts.append(f"{key}={value}")
-        if parts:
-            return ", ".join(parts)
+    if isinstance(payload, dict):
+        error = payload.get("error")
+        if isinstance(error, dict):
+            parts = []
+            for key in ("message", "type", "code", "param"):
+                value = error.get(key)
+                if value is not None:
+                    parts.append(f"{key}={value}")
+            if parts:
+                return ", ".join(parts)
 
     return json.dumps(payload, sort_keys=True)
 
