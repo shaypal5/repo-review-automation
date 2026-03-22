@@ -119,19 +119,28 @@ def main() -> None:
     args = parse_args()
     findings_payload = load_json(Path(args.input))
     reopen_enabled = args.reopen_closed_issues == "true"
-    with requests.Session() as session:
-        closed_issues = list_closed_issues(
-            args.repo,
-            token=github_token_from_env(),
-            session=session,
-        )
-        remaining_payload, reopened_payload = process_closed_issue_matches(
-            findings_payload,
-            repo=args.repo,
-            reopen_closed_issues=reopen_enabled,
-            existing_closed_issues=closed_issues,
-            session=session,
-        )
+    if not reopen_enabled:
+        remaining_payload = findings_payload
+        reopened_payload = {
+            "repo": args.repo,
+            "reopen_closed_issues": reopen_enabled,
+            "reopened_count": 0,
+            "issues": [],
+        }
+    else:
+        with requests.Session() as session:
+            closed_issues = list_closed_issues(
+                args.repo,
+                token=github_token_from_env(),
+                session=session,
+            )
+            remaining_payload, reopened_payload = process_closed_issue_matches(
+                findings_payload,
+                repo=args.repo,
+                reopen_closed_issues=reopen_enabled,
+                existing_closed_issues=closed_issues,
+                session=session,
+            )
     dump_json(Path(args.output), remaining_payload)
     dump_json(Path(args.reopened_output), reopened_payload)
 

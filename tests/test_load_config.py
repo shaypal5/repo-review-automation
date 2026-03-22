@@ -115,3 +115,10 @@ def test_absolute_config_path_is_rejected(tmp_path: Path) -> None:
 def test_parent_traversal_outside_repo_is_rejected(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="outside repository root"):
         build_effective_config(make_args(tmp_path, config_path="../outside.yml"))
+
+
+def test_max_issues_zero_is_treated_as_unset_workflow_input(tmp_path: Path) -> None:
+    config = build_effective_config(make_args(tmp_path, max_issues=0))
+
+    assert config["max_issues"] == 5
+    assert config["sources"]["max_issues"] == "default"

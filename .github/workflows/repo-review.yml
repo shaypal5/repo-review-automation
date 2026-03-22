@@ -24,10 +24,10 @@ on:
         type: string
         default: ""
       max_issues:
-        description: Explicit maximum findings override. Empty uses repo config or workflow default.
+        description: Explicit maximum findings override. Use 0 to fall back to repo config or workflow default.
         required: false
-        type: string
-        default: ""
+        type: number
+        default: 0
       labels:
         description: Explicit comma-separated issue label override. Empty uses repo config or workflow default.
         required: false
@@ -118,10 +118,10 @@ on:
         value: ${{ jobs.create_issues.outputs.reopened_issue_numbers || jobs.review.outputs.reopened_issue_numbers }}
       comment_posted:
         description: Whether the workflow posted or updated a GitHub summary comment.
-        value: ${{ jobs.create_issues.outputs.comment_posted || jobs.review.outputs.comment_posted }}
+        value: ${{ jobs.create_issues.outputs.comment_posted || jobs.post_report_comment.outputs.comment_posted || jobs.review.outputs.comment_posted }}
       comment_url:
         description: URL of the posted or updated GitHub summary comment, when available.
-        value: ${{ jobs.create_issues.outputs.comment_url || jobs.review.outputs.comment_url }}
+        value: ${{ jobs.create_issues.outputs.comment_url || jobs.post_report_comment.outputs.comment_url || jobs.review.outputs.comment_url }}
 
 permissions:
   contents: read
@@ -133,7 +133,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      issues: write
       pull-requests: read
       security-events: read
     outputs:
@@ -148,6 +147,9 @@ jobs:
       reopened_issue_numbers: ${{ steps.finalize.outputs.reopened_issue_numbers }}
       comment_posted: ${{ steps.finalize.outputs.comment_posted }}
       comment_url: ${{ steps.finalize.outputs.comment_url }}
+      review_mode: ${{ steps.config.outputs.review_mode }}
+      comment_mode: ${{ steps.config.outputs.comment_mode }}
+      comment_issue_number: ${{ steps.config.outputs.comment_issue_number }}
     steps:
       - name: Resolve automation repository reference
         id: workflow_ref
@@ -341,10 +343,9 @@ jobs:
           Path("out/summary_comment.md").write_text("", encoding="utf-8")
           PY
 
-      - name: Render or post summary comment
+      - name: Render summary comment artifact
         if: ${{ !inputs.create_issues }}
         env:
-          GITHUB_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           python automation/scripts/post_summary_comment.py \
@@ -354,8 +355,8 @@ jobs:
             --created-issues out/created_issues.json \
             --reopened-issues out/reopened_issues.json \
             --review-mode "${{ steps.config.outputs.review_mode }}" \
-            --comment-mode "${{ steps.config.outputs.comment_mode }}" \
-            --comment-issue-number "${{ steps.config.outputs.comment_issue_number }}" \
+            --comment-mode "off" \
+            --comment-issue-number "" \
             --summary-output out/summary_comment.md \
             --result-output out/comment_result.json
           cat out/summary_comment.md >> "$GITHUB_STEP_SUMMARY"
@@ -450,6 +451,166 @@ jobs:
           echo "created_issues_json_path=out/created_issues.json" >> "$GITHUB_OUTPUT"
           echo "reopened_issue_count=${reopened_issue_count}" >> "$GITHUB_OUTPUT"
           echo "reopened_issue_numbers=${reopened_issue_numbers}" >> "$GITHUB_OUTPUT"
+          echo "comment_posted=${comment_posted}" >> "$GITHUB_OUTPUT"
+          echo "comment_url=${comment_url}" >> "$GITHUB_OUTPUT"
+
+  post_report_comment:
+    runs-on: ubuntu-latest
+    needs: [review]
+    if: ${{ !inputs.create_issues && needs.review.outputs.comment_mode == 'summary' }}
+    permissions:
+      contents: read
+      issues: write
+    outputs:
+      comment_posted: ${{ steps.finalize.outputs.comment_posted }}
+      comment_url: ${{ steps.finalize.outputs.comment_url }}
+    steps:
+      - name: Resolve automation repository reference
+        id: workflow_ref
+        shell: bash
+        run: |
+          workflow_ref="${{ github.workflow_ref }}"
+          echo "repository=${workflow_ref%%/.github/workflows/*}" >> "$GITHUB_OUTPUT"
+          echo "ref=${workflow_ref##*@}" >> "$GITHUB_OUTPUT"
+
+      - name: Check out automation repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.workflow_ref.outputs.repository }}
+          ref: ${{ steps.workflow_ref.outputs.ref }}
+          path: automation
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python_version }}
+
+      - name: Install helper dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install jsonschema PyYAML requests
+
+      - name: Download review artifacts
+        if: ${{ inputs.upload_artifacts }}
+        uses: actions/download-artifact@v4
+        with:
+          name: repo-review-report
+          path: .
+
+      - name: Download review findings fallback
+        if: ${{ !inputs.upload_artifacts }}
+        uses: actions/download-artifact@v4
+        with:
+          name: _review-findings-passthrough
+          path: .
+
+      - name: Initialize missing report-only artifacts when needed
+        if: ${{ !inputs.upload_artifacts }}
+        shell: bash
+        run: |
+          mkdir -p out
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          defaults = {
+              "out/dedupe_report.json": {
+                  "mode": "off",
+                  "total_findings": 0,
+                  "kept_count": 0,
+                  "skipped_count": 0,
+                  "findings": [],
+              },
+              "out/created_issues.json": {
+                  "repo": "${{ github.repository }}",
+                  "requested_count": 0,
+                  "created_count": 0,
+                  "labels": [],
+                  "issues": [],
+              },
+              "out/reopened_issues.json": {
+                  "repo": "${{ github.repository }}",
+                  "reopen_closed_issues": False,
+                  "reopened_count": 0,
+                  "issues": [],
+              },
+          }
+          for path_str, payload in defaults.items():
+              path = Path(path_str)
+              if not path.exists():
+                  path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+
+      - name: Materialize effective config
+        id: config
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path("out/effective_config.json").read_text(encoding="utf-8"))
+          print(f"review_mode={payload['review_mode']}")
+          print(f"comment_mode={payload['comment_mode']}")
+          print(f"comment_issue_number={payload['comment_issue_number'] or ''}")
+          PY
+
+      - name: Post or update summary comment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          python automation/scripts/post_summary_comment.py \
+            --repo "${{ github.repository }}" \
+            --findings out/findings.json \
+            --dedupe-report out/dedupe_report.json \
+            --created-issues out/created_issues.json \
+            --reopened-issues out/reopened_issues.json \
+            --review-mode "${{ steps.config.outputs.review_mode }}" \
+            --comment-mode "${{ steps.config.outputs.comment_mode }}" \
+            --comment-issue-number "${{ steps.config.outputs.comment_issue_number }}" \
+            --summary-output out/summary_comment.md \
+            --result-output out/comment_result.json
+
+      - name: Upload updated artifacts
+        if: ${{ inputs.upload_artifacts }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: repo-review-report
+          path: |
+            out/review_context.json
+            out/raw_findings.json
+            out/findings.json
+            out/findings_deduped.json
+            out/findings.md
+            out/dedupe_report.json
+            out/effective_config.json
+            out/created_issues.json
+            out/reopened_issues.json
+            out/summary_comment.md
+            out/comment_result.json
+            out/signals
+          overwrite: true
+
+      - name: Finalize outputs
+        id: finalize
+        shell: bash
+        run: |
+          comment_posted="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path("out/comment_result.json").read_text(encoding="utf-8"))
+          print("true" if payload.get("posted") else "false")
+          PY
+          )"
+          comment_url="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path("out/comment_result.json").read_text(encoding="utf-8"))
+          print(payload.get("comment_url") or "")
+          PY
+          )"
           echo "comment_posted=${comment_posted}" >> "$GITHUB_OUTPUT"
           echo "comment_url=${comment_url}" >> "$GITHUB_OUTPUT"
 

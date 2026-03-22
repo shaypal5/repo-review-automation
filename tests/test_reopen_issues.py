@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from argparse import Namespace
 from pathlib import Path
 
 from scripts.helpers import compute_finding_fingerprint, load_json
-from scripts.reopen_issues import process_closed_issue_matches
+from scripts.reopen_issues import main, process_closed_issue_matches
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -123,3 +124,46 @@ def test_reopen_disabled_does_not_require_token(monkeypatch: object) -> None:
 
     assert len(actionable["findings"]) == len(payload["findings"])
     assert reopened["reopened_count"] == 0
+
+
+def test_main_short_circuits_when_reopen_disabled(monkeypatch: object, tmp_path: Path) -> None:
+    payload = load_json(FIXTURES / "findings_deduped_input.json")
+    captured_writes: dict[str, dict[str, object]] = {}
+
+    monkeypatch.setattr(
+        "scripts.reopen_issues.parse_args",
+        lambda: Namespace(
+            repo="example/repo",
+            input=str(tmp_path / "findings.json"),
+            reopen_closed_issues="false",
+            output=str(tmp_path / "remaining.json"),
+            reopened_output=str(tmp_path / "reopened.json"),
+        ),
+    )
+    monkeypatch.setattr("scripts.reopen_issues.load_json", lambda _: payload)
+    monkeypatch.setattr(
+        "scripts.reopen_issues.list_closed_issues",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("list_closed_issues should not be called when reopen is disabled")
+        ),
+    )
+    monkeypatch.setattr(
+        "scripts.reopen_issues.github_token_from_env",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("github_token_from_env should not be called when reopen is disabled")
+        ),
+    )
+    monkeypatch.setattr(
+        "scripts.reopen_issues.dump_json",
+        lambda path, data: captured_writes.__setitem__(str(path), data),
+    )
+
+    main()
+
+    assert captured_writes[str(tmp_path / "remaining.json")] == payload
+    assert captured_writes[str(tmp_path / "reopened.json")] == {
+        "repo": "example/repo",
+        "reopen_closed_issues": False,
+        "reopened_count": 0,
+        "issues": [],
+    }

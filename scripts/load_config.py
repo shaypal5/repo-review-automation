@@ -238,6 +238,9 @@ def collect_input_overrides(args: argparse.Namespace) -> dict[str, Any]:
     for field_name, raw_value in raw_inputs.items():
         if isinstance(raw_value, str) and raw_value == "":
             continue
+        if field_name == "max_issues":
+            if raw_value in {0, "0", 0.0, "0.0"}:
+                continue
         overrides[field_name] = raw_value
     return normalize_mapping(overrides)
 
