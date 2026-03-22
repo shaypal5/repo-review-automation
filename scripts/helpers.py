@@ -13,6 +13,7 @@ import requests
 GITHUB_API_ROOT = "https://api.github.com"
 FINGERPRINT_MARKER_PREFIX = "<!-- repo-review-fingerprint: "
 FINGERPRINT_MARKER_SUFFIX = " -->"
+SUMMARY_COMMENT_MARKER = "<!-- repo-review-summary-comment -->"
 FINGERPRINT_MARKER_RE = re.compile(
     r"<!--\s*repo-review-fingerprint:\s*([0-9a-f]+)\s*-->",
     re.IGNORECASE,
@@ -177,7 +178,10 @@ def build_issue_body(finding: dict[str, Any], *, fingerprint: str) -> str:
 def github_token_from_env() -> str:
     token = os.environ.get("GITHUB_TOKEN", "").strip()
     if not token:
-        raise RuntimeError("GITHUB_TOKEN is required for GitHub issue deduplication and creation.")
+        raise RuntimeError(
+            "GITHUB_TOKEN is required for GitHub issue deduplication, creation, reopening, "
+            "and comment posting."
+        )
     return token
 
 
@@ -239,12 +243,16 @@ def github_request(
             client.close()
 
 
-def list_open_issues(
+def list_issues(
     repo: str,
     *,
+    state: str,
     token: str,
     session: requests.Session | None = None,
 ) -> list[dict[str, Any]]:
+    normalized_state = state.strip().lower()
+    if normalized_state not in {"open", "closed", "all"}:
+        raise ValueError(f"state must be one of open, closed, or all. Got: {state!r}")
     issues: list[dict[str, Any]] = []
     page = 1
     while True:
@@ -253,7 +261,7 @@ def list_open_issues(
             f"/repos/{repo}/issues",
             token=token,
             session=session,
-            params={"state": "open", "per_page": 100, "page": page},
+            params={"state": normalized_state, "per_page": 100, "page": page},
         )
         if not isinstance(payload, list):
             raise RuntimeError(
@@ -265,6 +273,24 @@ def list_open_issues(
             break
         page += 1
     return issues
+
+
+def list_open_issues(
+    repo: str,
+    *,
+    token: str,
+    session: requests.Session | None = None,
+) -> list[dict[str, Any]]:
+    return list_issues(repo, state="open", token=token, session=session)
+
+
+def list_closed_issues(
+    repo: str,
+    *,
+    token: str,
+    session: requests.Session | None = None,
+) -> list[dict[str, Any]]:
+    return list_issues(repo, state="closed", token=token, session=session)
 
 
 def create_issue(
@@ -286,5 +312,99 @@ def create_issue(
     if not isinstance(payload, dict):
         raise RuntimeError(
             f"Expected issue creation response to be an object, got: {type(payload)!r}"
+        )
+    return payload
+
+
+def reopen_issue(
+    repo: str,
+    *,
+    token: str,
+    issue_number: int,
+    session: requests.Session | None = None,
+) -> dict[str, Any]:
+    payload = github_request(
+        "PATCH",
+        f"/repos/{repo}/issues/{issue_number}",
+        token=token,
+        session=session,
+        json_payload={"state": "open"},
+    )
+    if not isinstance(payload, dict):
+        raise RuntimeError(
+            f"Expected issue reopen response to be an object, got: {type(payload)!r}"
+        )
+    return payload
+
+
+def list_issue_comments(
+    repo: str,
+    *,
+    issue_number: int,
+    token: str,
+    session: requests.Session | None = None,
+) -> list[dict[str, Any]]:
+    comments: list[dict[str, Any]] = []
+    page = 1
+    while True:
+        payload = github_request(
+            "GET",
+            f"/repos/{repo}/issues/{issue_number}/comments",
+            token=token,
+            session=session,
+            params={"per_page": 100, "page": page},
+        )
+        if not isinstance(payload, list):
+            raise RuntimeError(
+                "Expected a list when listing issue comments for "
+                f"{repo}#{issue_number}, got: {type(payload)!r}"
+            )
+        comments.extend(payload)
+        if len(payload) < 100:
+            break
+        page += 1
+    return comments
+
+
+def create_issue_comment(
+    repo: str,
+    *,
+    issue_number: int,
+    token: str,
+    body: str,
+    session: requests.Session | None = None,
+) -> dict[str, Any]:
+    payload = github_request(
+        "POST",
+        f"/repos/{repo}/issues/{issue_number}/comments",
+        token=token,
+        session=session,
+        json_payload={"body": body},
+    )
+    if not isinstance(payload, dict):
+        raise RuntimeError(
+            f"Expected comment creation response to be an object, got: {type(payload)!r}"
+        )
+    return payload
+
+
+def update_issue_comment(
+    repo: str,
+    *,
+    comment_id: int,
+    token: str,
+    body: str,
+    session: requests.Session | None = None,
+) -> dict[str, Any]:
+    payload = github_request(
+        "PATCH",
+        f"/repos/{repo}/issues/comments/{comment_id}",
+        token=token,
+        session=session,
+        json_payload={"body": body},
+    )
+    if not isinstance(payload, dict):
+        raise RuntimeError(
+            f"Expected comment update response to be an object, got: {type(payload)!r}"
         )
     return payload
