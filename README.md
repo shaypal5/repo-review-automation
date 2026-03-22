@@ -264,6 +264,22 @@ Optional:
 
 If `OPENAI_MODEL` is not set, the workflow defaults to `gpt-4.1-mini`.
 
+### Minimum OpenAI API key permissions
+
+The current implementation calls the Chat Completions API directly at `/v1/chat/completions`.
+
+For a restricted OpenAI API key, the minimum required permission set is:
+
+- `Chat completions (/v1/chat/completions)`: `Request`
+
+All other OpenAI API key permissions can remain set to `None` (disabled).
+
+You do not need `Responses`, `Assistants`, `Threads`, `Files`, `Embeddings`, `Moderations`, or media-related permissions for the current workflow.
+
+If the implementation later migrates from Chat Completions to the Responses API, the minimum permission would change to:
+
+- `Responses (/v1/responses)`: `Request`
+
 Data disclosure note: deterministic repository signals and the resulting review context are sent to the OpenAI API. Consumers should confirm that this is acceptable for their security and compliance requirements before enabling the workflow.
 
 ## Example consumer workflows
