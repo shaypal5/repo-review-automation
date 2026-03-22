@@ -2,6 +2,9 @@ name: Reusable Repo Review
 
 on:
   workflow_call:
+    secrets:
+      OPENAI_API_KEY:
+        required: true
     inputs:
       create_issues:
         description: Enable dedupe, closed-issue reopen handling, and issue creation for accepted findings.
