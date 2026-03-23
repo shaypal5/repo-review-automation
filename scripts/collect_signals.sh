@@ -236,7 +236,7 @@ PY
 run_capture \
   "TODO/FIXME/HACK scan" \
   "$todos_file" \
-  sh -c "cd \"$REPO_ROOT\" && rg -n --hidden --glob '!.git' 'TODO|FIXME|HACK' ${PATHS@Q}"
+  sh -c "cd \"$REPO_ROOT\" && grep -rEn --exclude-dir='.git' 'TODO|FIXME|HACK' ${PATHS@Q}"
 
 if [[ -f "${REPO_ROOT}/pyproject.toml" || -f "${REPO_ROOT}/requirements.txt" ]]; then
   if find "$REPO_ROOT" -type f \( -path "*/tests/*" -o -name "test_*.py" \) | head -n 1 >/dev/null; then
@@ -260,7 +260,7 @@ if [[ -d "${REPO_ROOT}/.github/workflows" ]]; then
   run_capture \
     "Workflow scan" \
     "$ci_workflows_file" \
-    sh -c "cd \"$REPO_ROOT\" && rg -n '' .github/workflows"
+    sh -c "cd \"$REPO_ROOT\" && grep -rn '' .github/workflows"
 else
   echo "No .github/workflows directory detected." >"$ci_workflows_file"
 fi
