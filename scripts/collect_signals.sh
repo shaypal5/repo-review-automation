@@ -30,6 +30,15 @@ mkdir -p "$OUTPUT_DIR"
 
 REPO_ROOT="$(cd "$REPO_ROOT" && pwd)"
 
+PATH_ARGS=()
+normalized_paths="${PATHS//,/ }"
+for path_entry in $normalized_paths; do
+  [[ -n "$path_entry" ]] && PATH_ARGS+=("$path_entry")
+done
+if [[ ${#PATH_ARGS[@]} -eq 0 ]]; then
+  PATH_ARGS=(".")
+fi
+
 metadata_file="$OUTPUT_DIR/metadata.json"
 project_metadata_file="$OUTPUT_DIR/project_metadata.txt"
 file_inventory_file="$OUTPUT_DIR/file_inventory.txt"
@@ -236,21 +245,31 @@ PY
 run_capture \
   "TODO/FIXME/HACK scan" \
   "$todos_file" \
-  sh -c "cd \"$REPO_ROOT\" && rg -n --hidden --glob '!.git' 'TODO|FIXME|HACK' ${PATHS@Q}"
+  bash -lc 'cd "$1" && grep -rEHn \
+    --exclude-dir=.git \
+    --exclude-dir=.venv \
+    --exclude-dir=venv \
+    --exclude-dir=dist \
+    --exclude-dir=build \
+    --exclude-dir=node_modules \
+    "TODO|FIXME|HACK" "${@:2}"' \
+  _ "$REPO_ROOT" "${PATH_ARGS[@]}"
 
 if [[ -f "${REPO_ROOT}/pyproject.toml" || -f "${REPO_ROOT}/requirements.txt" ]]; then
   if find "$REPO_ROOT" -type f \( -path "*/tests/*" -o -name "test_*.py" \) | head -n 1 >/dev/null; then
     run_capture \
       "Pytest collection" \
       "$tests_file" \
-      sh -c "cd \"$REPO_ROOT\" && python3 -m pytest --collect-only -q ${PATHS@Q}"
+      bash -lc 'cd "$1" && python3 -m pytest --collect-only -q "${@:2}"' \
+      _ "$REPO_ROOT" "${PATH_ARGS[@]}"
   else
     echo "No Python tests detected." >"$tests_file"
   fi
   run_capture \
     "Python compileall" \
     "$lint_file" \
-    sh -c "cd \"$REPO_ROOT\" && python3 -m compileall -q ${PATHS@Q}"
+    bash -lc 'cd "$1" && python3 -m compileall -q "${@:2}"' \
+    _ "$REPO_ROOT" "${PATH_ARGS[@]}"
 else
   echo "No Python project metadata detected; skipped Python checks." >"$tests_file"
   echo "No Python project metadata detected; skipped lint-style checks." >"$lint_file"
@@ -260,7 +279,7 @@ if [[ -d "${REPO_ROOT}/.github/workflows" ]]; then
   run_capture \
     "Workflow scan" \
     "$ci_workflows_file" \
-    sh -c "cd \"$REPO_ROOT\" && rg -n '' .github/workflows"
+    sh -c "cd \"$REPO_ROOT\" && grep -rn '' .github/workflows"
 else
   echo "No .github/workflows directory detected." >"$ci_workflows_file"
 fi
