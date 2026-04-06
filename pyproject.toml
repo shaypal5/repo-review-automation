@@ -21,7 +21,6 @@ dependencies = [
   "pyyaml>=6,<7",
   "requests>=2.31,<3",
 ]
-
 optional-dependencies.dev = [
   "pytest>=8,<9",
   "pytest-cov>=5,<7",
@@ -33,9 +32,8 @@ packages = [ "repo_review_automation", "scripts" ]
 
 [tool.ruff]
 target-version = "py311"
-
 line-length = 100
 lint.select = [ "E", "F", "I", "UP" ]
 
-[tool.pytest.ini_options]
-testpaths = [ "tests" ]
+[tool.pytest]
+ini_options.testpaths = [ "tests" ]
