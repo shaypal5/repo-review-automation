@@ -19,7 +19,7 @@
       "confidence": 0.72,
       "summary": "The annotation scan surfaced unresolved inline markers, which suggests backlog debt is building without a clear weekly triage path.",
       "evidence": [
-        "annotations.txt contains multiple unresolved inline markers",
+        "todos.txt contains multiple unresolved inline markers",
         "project_metadata.txt does not indicate a dedicated maintenance workflow"
       ],
       "recommended_fix": "Review the recurring inline annotations, convert the highest-risk ones into tracked work, and delete stale markers that no longer describe actionable work."
