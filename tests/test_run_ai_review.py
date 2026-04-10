@@ -91,7 +91,7 @@ def test_build_messages_system_role_contains_prompt() -> None:
 def test_build_messages_system_role_contains_max_issues() -> None:
     messages = build_messages("Prompt.", {"max_issues": 7})
     system_msg = next(m for m in messages if m["role"] == "system")
-    assert "7" in system_msg["content"]
+    assert "Return at most 7 findings" in system_msg["content"]
 
 
 def test_build_messages_user_role_contains_context_json() -> None:
