@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -27,7 +26,6 @@ from scripts.helpers import (
     truncate_text,
     write_text,
 )
-
 
 # ---------------------------------------------------------------------------
 # read_text / write_text

@@ -14,7 +14,6 @@ from scripts.run_ai_review import (
     load_user_message,
 )
 
-
 # ---------------------------------------------------------------------------
 # build_schema
 # ---------------------------------------------------------------------------
@@ -45,9 +44,9 @@ def test_build_schema_findings_items_have_required_fields() -> None:
 
 def test_build_schema_severity_enum_contains_expected_values() -> None:
     schema = build_schema()
-    severity_enum = (
-        schema["schema"]["properties"]["findings"]["items"]["properties"]["severity"]["enum"]
-    )
+    severity_enum = schema["schema"]["properties"]["findings"]["items"]["properties"]["severity"][
+        "enum"
+    ]
     assert set(severity_enum) == {"low", "medium", "high", "critical"}
 
 
@@ -126,9 +125,7 @@ def _make_response(status_code: int, body: str | bytes) -> MagicMock:
 
 
 def test_format_openai_error_parses_error_object() -> None:
-    body = json.dumps(
-        {"error": {"message": "invalid key", "type": "auth_error", "code": "401"}}
-    )
+    body = json.dumps({"error": {"message": "invalid key", "type": "auth_error", "code": "401"}})
     resp = _make_response(401, body)
     result = format_openai_error(resp)
     assert "message=invalid key" in result
