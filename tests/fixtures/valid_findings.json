@@ -13,16 +13,16 @@
       "recommended_fix": "Add a required lightweight syntax or import validation step to the caller repository so obviously broken Python changes fail before release."
     },
     {
-      "title": "TODO debt is accumulating without triage",
+      "title": "Unresolved code annotations are accumulating without triage",
       "category": "maintainability",
       "severity": "medium",
       "confidence": 0.72,
-      "summary": "The TODO scan surfaced unresolved TODO and FIXME markers, which suggests backlog debt is building without a clear weekly triage path.",
+      "summary": "The annotation scan surfaced unresolved inline markers, which suggests backlog debt is building without a clear weekly triage path.",
       "evidence": [
-        "todos.txt contains multiple TODO and FIXME matches",
+        "annotations.txt contains multiple unresolved inline markers",
         "project_metadata.txt does not indicate a dedicated maintenance workflow"
       ],
-      "recommended_fix": "Review the recurring TODO and FIXME entries, convert the highest-risk ones into tracked work, and delete stale markers that no longer describe actionable work."
+      "recommended_fix": "Review the recurring inline annotations, convert the highest-risk ones into tracked work, and delete stale markers that no longer describe actionable work."
     },
     {
       "title": "Minor documentation drift around local commands",

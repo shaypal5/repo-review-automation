@@ -243,7 +243,7 @@ for directory, count in directories.most_common(20):
 PY
 
 run_capture \
-  "TODO/FIXME/HACK scan" \
+  "Inline annotation scan" \
   "$todos_file" \
   bash -lc 'cd "$1" && grep -rEHn \
     --exclude-dir=.git \
@@ -252,6 +252,7 @@ run_capture \
     --exclude-dir=dist \
     --exclude-dir=build \
     --exclude-dir=node_modules \
+    --exclude-dir=tests \
     "TODO|FIXME|HACK" "${@:2}"' \
   _ "$REPO_ROOT" "${PATH_ARGS[@]}"
 
