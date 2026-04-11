@@ -322,7 +322,14 @@ with:
 ### OpenAI-compatible endpoints
 
 Use `llm_provider: openai_compatible` together with `llm_api_base_url` to call any endpoint that
-implements the OpenAI Chat Completions API (e.g. Azure OpenAI, Ollama, or a custom deployment).
+implements the OpenAI Chat Completions API and accepts standard `Authorization: Bearer <token>`
+authentication (for example, Ollama-compatible gateways or a custom deployment that uses Bearer
+auth).
+
+Note: the current `openai_compatible` implementation sends the API key as an
+`Authorization: Bearer ...` header. Azure OpenAI typically expects an `api-key` header instead, so
+Azure OpenAI is not directly supported by this mode unless it is placed behind a proxy or gateway
+that accepts Bearer authentication and forwards the request appropriately.
 
 Required secret:
 
@@ -330,18 +337,18 @@ Required secret:
 
 Required input:
 
-- `llm_api_base_url` — full URL of the `/v1/chat/completions` endpoint
+- `llm_api_base_url` — full Chat Completions endpoint URL (e.g. `https://host/v1/chat/completions`; may include query parameters)
 
 Optional variable:
 
-- `LLM_MODEL` — model name (no default; set this to match your deployment).
+- `LLM_MODEL` — model name. Defaults to `gpt-4.1-mini` when not set; set this to match your deployment.
 
 Example caller workflow input:
 
 ```yaml
 with:
   llm_provider: openai_compatible
-  llm_api_base_url: https://my-azure-deployment.openai.azure.com/openai/deployments/my-model/chat/completions?api-version=2024-02-01
+  llm_api_base_url: https://my-gateway.example.com/v1/chat/completions
 ```
 
 ### Choosing a model

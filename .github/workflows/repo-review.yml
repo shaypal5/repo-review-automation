@@ -322,17 +322,17 @@ jobs:
               )
           PY
 
-          BASE_URL_ARG=""
+          args=(
+            --prompt-file "${{ steps.prompt.outputs.file }}"
+            --context-file out/review_context.json
+            --output out/raw_findings.json
+            --provider "$_REVIEW_PROVIDER"
+          )
           if [[ -n "$_REVIEW_BASE_URL" ]]; then
-            BASE_URL_ARG="--api-base-url $_REVIEW_BASE_URL"
+            args+=(--api-base-url "$_REVIEW_BASE_URL")
           fi
 
-          python automation/scripts/run_ai_review.py \
-            --prompt-file "${{ steps.prompt.outputs.file }}" \
-            --context-file out/review_context.json \
-            --output out/raw_findings.json \
-            --provider "$_REVIEW_PROVIDER" \
-            ${BASE_URL_ARG:+$BASE_URL_ARG}
+          python automation/scripts/run_ai_review.py "${args[@]}"
 
       - name: Validate and normalize findings
         shell: bash

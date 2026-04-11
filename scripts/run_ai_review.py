@@ -75,7 +75,9 @@ def parse_args() -> argparse.Namespace:
         "--api-base-url",
         default=None,
         help=(
-            "Base URL for OpenAI-compatible providers (required when --provider=openai_compatible)."
+            "Full Chat Completions endpoint URL for OpenAI-compatible providers "
+            "(for example, https://host/v1/chat/completions; may include query "
+            "parameters if required). Required when --provider=openai_compatible."
         ),
     )
     args = parser.parse_args()
