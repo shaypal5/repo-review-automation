@@ -174,7 +174,6 @@ def test_load_json_payload_parses_valid_json_string() -> None:
     assert result == {"findings": []}
 
 
-
 def test_load_json_payload_raises_on_invalid_json() -> None:
     with pytest.raises((json.JSONDecodeError, ValueError)):
         load_json_payload("not valid json {")
@@ -189,9 +188,7 @@ def _make_openai_success_response(findings: dict) -> MagicMock:
     mock = MagicMock(spec=requests.Response)
     mock.status_code = 200
     mock.raise_for_status.return_value = None
-    mock.json.return_value = {
-        "choices": [{"message": {"content": json.dumps(findings)}}]
-    }
+    mock.json.return_value = {"choices": [{"message": {"content": json.dumps(findings)}}]}
     return mock
 
 
@@ -360,9 +357,7 @@ def test_call_anthropic_raises_runtime_error_on_401() -> None:
     messages = [{"role": "user", "content": "hello"}]
     mock_resp = MagicMock(spec=requests.Response)
     mock_resp.status_code = 401
-    body = (
-        '{"type": "error", "error": {"type": "authentication_error", "message": "bad key"}}'
-    )
+    body = '{"type": "error", "error": {"type": "authentication_error", "message": "bad key"}}'
     mock_resp.text = body
     mock_resp.json.return_value = json.loads(body)
     http_err = requests.HTTPError(response=mock_resp)
@@ -428,9 +423,7 @@ def _make_gemini_success_response(findings: dict) -> MagicMock:
     mock.status_code = 200
     mock.raise_for_status.return_value = None
     mock.json.return_value = {
-        "candidates": [
-            {"content": {"parts": [{"text": json.dumps(findings)}]}}
-        ]
+        "candidates": [{"content": {"parts": [{"text": json.dumps(findings)}]}}]
     }
     return mock
 

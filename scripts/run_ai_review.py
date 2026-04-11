@@ -75,8 +75,7 @@ def parse_args() -> argparse.Namespace:
         "--api-base-url",
         default=None,
         help=(
-            "Base URL for OpenAI-compatible providers "
-            "(required when --provider=openai_compatible)."
+            "Base URL for OpenAI-compatible providers (required when --provider=openai_compatible)."
         ),
     )
     args = parser.parse_args()
@@ -218,8 +217,7 @@ def call_openai(
                 f"Details: {error_details}"
             ) from exc
         raise RuntimeError(
-            f"Request failed with status {status_code} at {url}. "
-            f"Details: {error_details}"
+            f"Request failed with status {status_code} at {url}. Details: {error_details}"
         ) from exc
     payload = response.json()
     content = payload["choices"][0]["message"]["content"]
@@ -370,8 +368,7 @@ def call_gemini(
                 f"Details: {error_details}"
             ) from exc
         raise RuntimeError(
-            f"Gemini request failed with status {status_code} at {url}. "
-            f"Details: {error_details}"
+            f"Gemini request failed with status {status_code} at {url}. Details: {error_details}"
         ) from exc
     payload = response.json()
     content = payload["candidates"][0]["content"]["parts"][0]["text"]
@@ -398,9 +395,7 @@ def main() -> None:
         findings = call_gemini(api_key=api_key, model=args.model, messages=messages)
     elif args.provider == "openai_compatible":
         if not args.api_base_url:
-            raise ValueError(
-                "--api-base-url is required when --provider=openai_compatible"
-            )
+            raise ValueError("--api-base-url is required when --provider=openai_compatible")
         findings = call_openai(
             api_key=api_key, model=args.model, messages=messages, url=args.api_base_url
         )
