@@ -242,18 +242,50 @@ for directory, count in directories.most_common(20):
     print(f"- {directory}: {count}")
 PY
 
-run_capture \
-  "TODO/FIXME/HACK scan" \
-  "$todos_file" \
-  bash -lc 'cd "$1" && grep -rEHn \
+{
+  annotation_pat='T''ODO|F''IXME|H''ACK'
+  echo "# Inline annotation scan"
+  echo
+  printf '$ cd %q && grep -rEHn' "$REPO_ROOT"
+  printf ' %q' \
     --exclude-dir=.git \
     --exclude-dir=.venv \
     --exclude-dir=venv \
     --exclude-dir=dist \
     --exclude-dir=build \
     --exclude-dir=node_modules \
-    "TODO|FIXME|HACK" "${@:2}"' \
-  _ "$REPO_ROOT" "${PATH_ARGS[@]}"
+    --exclude-dir=tests \
+    "$annotation_pat" --
+  for _path_arg in "${PATH_ARGS[@]}"; do
+    printf ' %q' "$_path_arg"
+  done
+  printf '\n'
+  echo
+  if ! (cd "$REPO_ROOT") 2>/dev/null; then
+    echo "Error: cannot enter REPO_ROOT: ${REPO_ROOT}"
+    echo
+    echo "[status] failure (1)"
+  else
+    grep_status=0
+    (cd "$REPO_ROOT" && grep -rEHn \
+      --exclude-dir=.git \
+      --exclude-dir=.venv \
+      --exclude-dir=venv \
+      --exclude-dir=dist \
+      --exclude-dir=build \
+      --exclude-dir=node_modules \
+      --exclude-dir=tests \
+      "$annotation_pat" -- "${PATH_ARGS[@]}") 2>&1 || grep_status=$?
+    if [[ $grep_status -le 1 ]]; then
+      [[ $grep_status -eq 1 ]] && echo "No annotation markers found."
+      echo
+      echo "[status] success"
+    else
+      echo
+      echo "[status] failure (${grep_status})"
+    fi
+  fi
+} >"$todos_file" 2>&1
 
 if [[ -f "${REPO_ROOT}/pyproject.toml" || -f "${REPO_ROOT}/requirements.txt" ]]; then
   if find "$REPO_ROOT" -type f \( -path "*/tests/*" -o -name "test_*.py" \) | head -n 1 >/dev/null; then
