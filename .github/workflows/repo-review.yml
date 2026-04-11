@@ -4,7 +4,11 @@ on:
   workflow_call:
     secrets:
       OPENAI_API_KEY:
-        required: true
+        required: false
+      ANTHROPIC_API_KEY:
+        required: false
+      GEMINI_API_KEY:
+        required: false
     inputs:
       create_issues:
         description: Enable dedupe, closed-issue reopen handling, and issue creation for accepted findings.
@@ -88,6 +92,21 @@ on:
         default: ""
       ignored_categories:
         description: Explicit comma-separated ignored categories override.
+        required: false
+        type: string
+        default: ""
+      llm_provider:
+        description: >
+          LLM provider to use for the AI review step.
+          Supported values: openai, anthropic, gemini, openai_compatible.
+          Defaults to openai.
+        required: false
+        type: string
+        default: "openai"
+      llm_api_base_url:
+        description: >
+          Base URL for OpenAI-compatible providers (e.g. Azure OpenAI or a self-hosted model).
+          Required when llm_provider is openai_compatible.
         required: false
         type: string
         default: ""
@@ -272,29 +291,48 @@ jobs:
       - name: Run AI review
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4.1-mini' }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          LLM_MODEL: ${{ vars.LLM_MODEL || vars.OPENAI_MODEL || '' }}
+          _REVIEW_PROVIDER: ${{ inputs.llm_provider || 'openai' }}
+          _REVIEW_BASE_URL: ${{ inputs.llm_api_base_url || '' }}
         shell: bash
         run: |
           python - <<'PY'
           import hashlib
           import os
 
-          key = os.environ.get("OPENAI_API_KEY", "")
+          provider = os.environ.get("_REVIEW_PROVIDER", "openai")
+          key_env = {
+              "openai": "OPENAI_API_KEY",
+              "anthropic": "ANTHROPIC_API_KEY",
+              "gemini": "GEMINI_API_KEY",
+              "openai_compatible": "OPENAI_API_KEY",
+          }.get(provider, "OPENAI_API_KEY")
+
+          key = os.environ.get(key_env, "")
           if not key:
-              print("OPENAI_API_KEY is empty")
+              print(f"{key_env} is empty")
           else:
-              print(f"OPENAI_API_KEY length: {len(key)}")
+              print(f"{key_env} length: {len(key)}")
               fingerprint = hashlib.sha256(key.encode("utf-8")).hexdigest()
               print(
-                  "OPENAI_API_KEY fingerprint (sha256, first 8 chars): "
+                  f"{key_env} fingerprint (sha256, first 8 chars): "
                   f"{fingerprint[:8]}"
               )
           PY
 
-          python automation/scripts/run_ai_review.py \
-            --prompt-file "${{ steps.prompt.outputs.file }}" \
-            --context-file out/review_context.json \
+          args=(
+            --prompt-file "${{ steps.prompt.outputs.file }}"
+            --context-file out/review_context.json
             --output out/raw_findings.json
+            --provider "$_REVIEW_PROVIDER"
+          )
+          if [[ -n "$_REVIEW_BASE_URL" ]]; then
+            args+=(--api-base-url "$_REVIEW_BASE_URL")
+          fi
+
+          python automation/scripts/run_ai_review.py "${args[@]}"
 
       - name: Validate and normalize findings
         shell: bash

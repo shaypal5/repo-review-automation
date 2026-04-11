@@ -252,21 +252,23 @@ Caller workflows need `issues: write` when they enable either:
 - `create_issues: true`
 - `comment_mode: summary` with a configured `comment_issue_number`
 
-## Required secret and AI configuration
+## AI provider and secret configuration
 
-Required:
+The workflow supports multiple LLM providers. Select a provider by setting the `llm_provider` workflow input (default: `openai`).
 
-- repository or organization secret: `OPENAI_API_KEY`
+### OpenAI (default)
 
-Optional:
+Required secret:
 
-- repository or organization variable: `OPENAI_MODEL`
+- `OPENAI_API_KEY`
 
-If `OPENAI_MODEL` is not set, the workflow defaults to `gpt-4.1-mini`.
+Optional variable:
 
-### Minimum OpenAI API key permissions
+- `LLM_MODEL` or `OPENAI_MODEL` — model name. Defaults to `gpt-4.1-mini`.
 
-The current implementation calls the Chat Completions API directly at `/v1/chat/completions`.
+#### Minimum OpenAI API key permissions
+
+The OpenAI provider calls the Chat Completions API directly at `/v1/chat/completions`.
 
 For a restricted OpenAI API key, the minimum required permission set is:
 
@@ -277,13 +279,87 @@ Important: setting only the `Chat completions` row to `Request` is not enough. T
 
 All other OpenAI API key permissions can remain set to `None` (disabled).
 
-You do not need `Responses`, `Assistants`, `Threads`, `Files`, `Embeddings`, `Moderations`, or media-related permissions for the current workflow.
+### Anthropic
 
-If the implementation later migrates from Chat Completions to the Responses API, the minimum permission would change to:
+Required secret:
 
-- `Responses (/v1/responses)`: `Request`
+- `ANTHROPIC_API_KEY`
 
-Data disclosure note: deterministic repository signals and the resulting review context are sent to the OpenAI API. Consumers should confirm that this is acceptable for their security and compliance requirements before enabling the workflow.
+Optional variable:
+
+- `LLM_MODEL` — model name. Defaults to `claude-3-5-haiku-20241022`.
+
+The Anthropic provider calls the Messages API at `https://api.anthropic.com/v1/messages` and uses
+tool use to enforce structured JSON output.
+
+Example caller workflow input:
+
+```yaml
+with:
+  llm_provider: anthropic
+```
+
+### Google Gemini
+
+Required secret:
+
+- `GEMINI_API_KEY`
+
+Optional variable:
+
+- `LLM_MODEL` — model name. Defaults to `gemini-2.0-flash`.
+
+The Gemini provider calls the `generateContent` endpoint and uses `responseSchema` to enforce
+structured JSON output.
+
+Example caller workflow input:
+
+```yaml
+with:
+  llm_provider: gemini
+```
+
+### OpenAI-compatible endpoints
+
+Use `llm_provider: openai_compatible` together with `llm_api_base_url` to call any endpoint that
+implements the OpenAI Chat Completions API and accepts standard `Authorization: Bearer <token>`
+authentication (for example, Ollama-compatible gateways or a custom deployment that uses Bearer
+auth).
+
+Note: the current `openai_compatible` implementation sends the API key as an
+`Authorization: Bearer ...` header. Azure OpenAI typically expects an `api-key` header instead, so
+Azure OpenAI is not directly supported by this mode unless it is placed behind a proxy or gateway
+that accepts Bearer authentication and forwards the request appropriately.
+
+Required secret:
+
+- `OPENAI_API_KEY` (or any secret whose name you pass via `--api-key-env` when invoking the script directly)
+
+Required input:
+
+- `llm_api_base_url` — full Chat Completions endpoint URL (e.g. `https://host/v1/chat/completions`; may include query parameters)
+
+Optional variable:
+
+- `LLM_MODEL` — model name. Defaults to `gpt-4.1-mini` when not set; set this to match your deployment.
+
+Example caller workflow input:
+
+```yaml
+with:
+  llm_provider: openai_compatible
+  llm_api_base_url: https://my-gateway.example.com/v1/chat/completions
+```
+
+### Choosing a model
+
+Set the `LLM_MODEL` repository or organization variable to override the default model for any
+provider. The `OPENAI_MODEL` variable is also honored for backward compatibility when `LLM_MODEL`
+is not set.
+
+Data disclosure note: deterministic repository signals and the resulting review context are sent to
+the configured LLM provider. Consumers should confirm that this is acceptable for their security
+and compliance requirements before enabling the workflow.
 
 ## Example consumer workflows
 
